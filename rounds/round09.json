@@ -1,0 +1,12 @@
+[
+  {"name": "r9a_minvalue10", "idea": "fine grid: looser Value floor (10th pct)",
+   "config": {"min_value_pct": 10.0}},
+  {"name": "r9b_minvalue15", "idea": "fine grid: Value floor 15th pct",
+   "config": {"min_value_pct": 15.0}},
+  {"name": "r9c_minvalue25", "idea": "fine grid: Value floor 25th pct",
+   "config": {"min_value_pct": 25.0}},
+  {"name": "r9d_minvalue30", "idea": "fine grid: Value floor 30th pct",
+   "config": {"min_value_pct": 30.0}},
+  {"name": "r9e_minvalue20_cap8", "idea": "combine the Value floor with the earlier close cap=8",
+   "config": {"cap_months": 8}}
+]

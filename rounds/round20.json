@@ -1,0 +1,6 @@
+[
+  {"name": "r20a_regularized_d", "idea": "final stability check: round-number config with Value floor=18 (the earlier robust winner) + cap=7 + trail=10%, no take-profit",
+   "config": {"trail_pct": 0.10, "cap_months": 7, "min_value_pct": 18.0, "take_profit_pct": null}},
+  {"name": "r20b_regularized_e", "idea": "final check: same but add back a round-number 50% take-profit",
+   "config": {"trail_pct": 0.10, "cap_months": 7, "min_value_pct": 18.0, "take_profit_pct": 0.50}}
+]

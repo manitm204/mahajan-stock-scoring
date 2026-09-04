@@ -1,0 +1,12 @@
+[
+  {"name": "r11a_minvalue16", "idea": "fine grid: Value floor 16th pct",
+   "config": {"min_value_pct": 16.0}},
+  {"name": "r11b_minvalue22", "idea": "fine grid: Value floor 22nd pct",
+   "config": {"min_value_pct": 22.0}},
+  {"name": "r11c_minvalue18_cap8", "idea": "combine Value floor 18 with cap=8",
+   "config": {"cap_months": 8}},
+  {"name": "r11d_minvalue18_cap6", "idea": "combine Value floor 18 with cap=6 (previously bad alone, but interactions may differ)",
+   "config": {"cap_months": 6}},
+  {"name": "r11e_minvalue18_k12", "idea": "slightly wider book (k=12) under the new Value-floor champion",
+   "config": {"k": 12}}
+]

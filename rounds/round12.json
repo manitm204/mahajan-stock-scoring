@@ -1,0 +1,12 @@
+[
+  {"name": "r12a_minvalue18_rankfloor75", "idea": "much looser rank floor (worst 25%) combined with the Value-floor champion",
+   "config": {"rank_floor_pct": 0.75}},
+  {"name": "r12b_minvalue18_scorefloor15", "idea": "very loose score floor (15) combined with the Value-floor champion",
+   "config": {"score_floor": 15.0}},
+  {"name": "r12c_minvalue18_hardstop06", "idea": "tight 6% hard stop from entry layered on top",
+   "config": {"hard_stop_pct": 0.06}},
+  {"name": "r12d_minvalue18_takeprofit50", "idea": "very loose 50% take-profit layered on top (only trims extreme outliers)",
+   "config": {"take_profit_pct": 0.50}},
+  {"name": "r12e_minvalue18_sectorcap5", "idea": "loose sector cap (5) combined with the Value-floor champion",
+   "config": {"max_per_sector": 5}}
+]

@@ -1,0 +1,12 @@
+[
+  {"name": "r3a_k15", "idea": "wider book (15 names) - more diversification, less concentration risk",
+   "config": {"k": 15}},
+  {"name": "r3b_k5", "idea": "tighter book (5 names) - higher conviction, more concentrated",
+   "config": {"k": 5}},
+  {"name": "r3c_sectorcap4", "idea": "looser sector cap (4 vs 3) - less binding, still limits worst-case sector pileup",
+   "config": {"max_per_sector": 4}},
+  {"name": "r3d_minhold1_trail13", "idea": "combo: 1M minimum hold (avoid whipsaw) + looser 13% trail (let winners run once past the whipsaw window)",
+   "config": {"min_hold_months": 1.0, "trail_pct": 0.13}},
+  {"name": "r3e_scorefloor30", "idea": "sell at next review if composite score falls below 30, on top of the trailing stop",
+   "config": {"score_floor": 30.0}}
+]

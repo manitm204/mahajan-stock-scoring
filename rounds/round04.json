@@ -1,0 +1,12 @@
+[
+  {"name": "r4a_trail09", "idea": "fine grid: trail 9% (between untested 10% and the failed 7%)",
+   "config": {"trail_pct": 0.09}},
+  {"name": "r4b_trail11", "idea": "fine grid: trail 11% (between 10% and the failed 13%)",
+   "config": {"trail_pct": 0.11}},
+  {"name": "r4c_k6", "idea": "fine grid: k=6 (between the close-but-failed k=5 and k=7)",
+   "config": {"k": 6}},
+  {"name": "r4d_k8", "idea": "fine grid: k=8 (between the close-but-failed k=7 and baseline k=10)",
+   "config": {"k": 8}},
+  {"name": "r4e_rankfloor60", "idea": "new lever: sell at review if the name falls into the worst 40% by rank (rank_pct>0.6), on top of the trailing stop",
+   "config": {"rank_floor_pct": 0.60}}
+]

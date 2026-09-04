@@ -1,0 +1,10 @@
+[
+  {"name": "r114a_mv12", "idea": "fine grid: Value floor 12",
+   "config": {"min_value_pct": 12.0}},
+  {"name": "r114b_mv13", "idea": "fine grid: Value floor 13",
+   "config": {"min_value_pct": 13.0}},
+  {"name": "r114c_mv16", "idea": "fine grid: Value floor 16",
+   "config": {"min_value_pct": 16.0}},
+  {"name": "r114d_mv17", "idea": "fine grid: Value floor 17",
+   "config": {"min_value_pct": 17.0}}
+]

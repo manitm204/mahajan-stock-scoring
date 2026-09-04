@@ -1,0 +1,12 @@
+[
+  {"name": "r8a_cap7_scorefloor20", "idea": "looser score floor (20) under 7M cap",
+   "config": {"score_floor": 20.0}},
+  {"name": "r8b_cap7_scorefloor40", "idea": "tighter score floor (40) under 7M cap",
+   "config": {"score_floor": 40.0}},
+  {"name": "r8c_cap7_sectorcap3", "idea": "sector cap 3 retested under the new 7M-cap champion",
+   "config": {"max_per_sector": 3}},
+  {"name": "r8d_cap7_minvalue20", "idea": "loose Value floor (20th pct) under 7M cap - just screens out the very most expensive names",
+   "config": {"min_value_pct": 20.0}},
+  {"name": "r8e_cap7_takeprofit40", "idea": "add a looser 40% take-profit under 7M cap",
+   "config": {"take_profit_pct": 0.40}}
+]

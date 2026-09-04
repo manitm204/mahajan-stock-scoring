@@ -1,0 +1,32 @@
+# Secrets
+.env
+
+# Data warehouse & caches
+cache/
+output/
+*.db
+*.db-wal
+*.db-shm
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+
+# Node
+node_modules/
+
+# Logs
+logs/
+*.log
+
+# Local tool state
+.claude/
+agentdb.rvf
+agentdb.rvf.lock

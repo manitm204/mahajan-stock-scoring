@@ -1,0 +1,10 @@
+[
+  {"name": "r1a_trail07", "idea": "tighter trailing stop (7% vs 10%) - cuts losers faster",
+   "config": {"trail_pct": 0.07}},
+  {"name": "r1b_trail13", "idea": "looser trailing stop (13% vs 10%) - lets winners run more",
+   "config": {"trail_pct": 0.13}},
+  {"name": "r1c_minhold1m", "idea": "1-month minimum hold before trailing stop can fire - avoids whipsaw right after entry",
+   "config": {"min_hold_months": 1.0}},
+  {"name": "r1d_k7", "idea": "more concentrated book (7 names vs 10)",
+   "config": {"k": 7}}
+]

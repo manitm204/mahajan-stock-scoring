@@ -1,0 +1,12 @@
+[
+  {"name": "r15a_mv24", "idea": "fine grid: Value floor 24th pct",
+   "config": {"min_value_pct": 24.0}},
+  {"name": "r15b_mv26", "idea": "fine grid: Value floor 26th pct",
+   "config": {"min_value_pct": 26.0}},
+  {"name": "r15c_tp55", "idea": "fine grid: take-profit 55%",
+   "config": {"take_profit_pct": 0.55}},
+  {"name": "r15d_scorefloor10", "idea": "very loose score floor (10) on top of current champion",
+   "config": {"score_floor": 10.0}},
+  {"name": "r15e_sectorcap6", "idea": "loose sector cap (6) on top of current champion",
+   "config": {"max_per_sector": 6}}
+]

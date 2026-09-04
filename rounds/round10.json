@@ -1,0 +1,12 @@
+[
+  {"name": "r10a_minvalue12", "idea": "fine grid: Value floor 12th pct (between 10 and 15, both close)",
+   "config": {"min_value_pct": 12.0}},
+  {"name": "r10b_minvalue18", "idea": "fine grid: Value floor 18th pct",
+   "config": {"min_value_pct": 18.0}},
+  {"name": "r10c_minvalue10_scorefloor30", "idea": "combine best-so-far Value floor with the earlier close score floor 30",
+   "config": {"min_value_pct": 10.0, "score_floor": 30.0}},
+  {"name": "r10d_minvalue10_rankfloor60", "idea": "combine Value floor 10 with rank floor 60",
+   "config": {"min_value_pct": 10.0, "rank_floor_pct": 0.60}},
+  {"name": "r10e_minvalue10_trail11", "idea": "combine Value floor 10 with slightly looser trail (11%)",
+   "config": {"min_value_pct": 10.0, "trail_pct": 0.11}}
+]

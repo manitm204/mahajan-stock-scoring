@@ -1,0 +1,18 @@
+[
+  {"name": "r71a_k8", "idea": "robustness: neighbor k=8 (champion moved to k=9 in the batch)",
+   "config": {"k": 8}},
+  {"name": "r71b_k10", "idea": "robustness: neighbor k=10",
+   "config": {"k": 10}},
+  {"name": "r71c_sectorcap1", "idea": "robustness: neighbor max_per_sector=1 (champion moved to 2)",
+   "config": {"max_per_sector": 1}},
+  {"name": "r71d_sectorcap3", "idea": "robustness: neighbor max_per_sector=3",
+   "config": {"max_per_sector": 3}},
+  {"name": "r71e_sectorcapNone", "idea": "robustness: drop the sector cap entirely",
+   "config": {"max_per_sector": null}},
+  {"name": "r71f_trail100", "idea": "robustness: revert the suspect trail=10.5% back to 10.0% in this new context",
+   "config": {"trail_pct": 0.10}},
+  {"name": "r71g_trail095", "idea": "robustness: trail=9.5% in this new context",
+   "config": {"trail_pct": 0.095}},
+  {"name": "r71h_trail110", "idea": "robustness: trail=11.0% in this new context",
+   "config": {"trail_pct": 0.11}}
+]

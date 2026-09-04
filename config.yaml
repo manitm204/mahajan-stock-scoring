@@ -1,0 +1,578 @@
+# ===========================================================================
+# Mahajan Hedge Fund - Layer 1 (Data Layer) Configuration
+# ===========================================================================
+# This file controls the behavior of the data ingestion platform.
+# API keys live in .env (never commit secrets here).
+# ===========================================================================
+
+database:
+  # Path to the central SQLite warehouse (relative to project root).
+  path: "cache/mahajan.db"
+  # Apply WAL journaling for better concurrent read performance.
+  wal_mode: true
+
+account:
+  # Total account equity used as the denominator for position-cap math
+  # (Layer 7 what-if + Layer 5 pre-trade). The book gross_nav inside the
+  # optimizer is a separate concept — see portfolio/optimizer.py.
+  starting_equity: 10000
+  # Max single-name position as a share of total equity (not book gross).
+  max_position_of_equity: 0.20
+
+paths:
+  cache_dir: "cache"
+  output_dir: "output"
+  log_file: "output/run.log"
+
+universe:
+  # Wikipedia source for S&P 500 constituents.
+  sp500_url: "https://en.wikipedia.org/wiki/List_of_S%26P_500_companies"
+  # How long (days) before the constituent list is considered stale.
+  refresh_days: 7
+  cache_file: "cache/sp500_constituents.csv"
+
+market_data:
+  # Years of daily OHLCV history to maintain.
+  history_years: 4
+  # yfinance bar interval.
+  interval: "1d"
+  # When backfilling, how far back to look for the earliest bar.
+  lookback_buffer_days: 5
+
+fundamentals:
+  # Period types to retain.
+  period_types:
+    - annual
+    - quarterly
+  # Incremental gate: a ticker's statements are refetched only when an earnings
+  # date has passed since the last fetch, or the last fetch is older than this
+  # many days (safety net for missing calendar coverage). `run_data.py --full`
+  # bypasses the gate. Each fetch costs ~6 provider calls per ticker.
+  refresh_days: 7
+
+features:
+  # Beta / relative strength benchmark.
+  market_benchmark: "SPY"
+  # Trading-day windows used by the price feature engine.
+  return_windows: [20, 60, 252]
+  volatility_window: 20
+  beta_window: 252
+  relative_volume_window: 20
+
+short_interest:
+  squeeze_short_pct_threshold: 0.20   # >20% of float short
+  squeeze_days_to_cover_threshold: 5.0
+
+estimates:
+  # Snapshot horizons (calendar days) for revision calculations.
+  revision_windows: [30, 60, 90]
+
+earnings_calendar:
+  proximity_windows: [7, 14, 30]
+
+sec:
+  # SEC EDGAR requires a descriptive User-Agent with contact info.
+  user_agent: "Mahajan Hedge Fund Research manitm204@gmail.com"
+  # SEC fair-access limit is 10 req/s; we stay under it.
+  max_requests_per_second: 8
+  default_form_types:
+    - "10-K"
+    - "10-Q"
+    - "8-K"
+    - "4"
+  recent_filing_days: 90
+  insider_large_purchase_usd: 1000000   # $1M+ = "Large Purchase" flag
+  cluster_buy_min_insiders: 3           # 3+ insiders buying = cluster
+
+institutional:
+  # 13F managers tracked by default (name -> CIK). A mix of concentrated value
+  # books and broad quant/multi-strat shops; the latter hold hundreds of names,
+  # so universe coverage of the 13F factor scales with this list.
+  funds:
+    # Eight broad quant/multi-strat books (each holds 200-360 universe names)
+    # provide coverage; four marquee managers add recognizable conviction.
+    "Citadel Advisors": "0001423053"
+    "AQR Capital Management": "0001167557"
+    "Millennium Management": "0001273087"
+    "D.E. Shaw": "0001009207"
+    "Two Sigma Investments": "0001179392"
+    "Bridgewater Associates": "0001350694"
+    "Renaissance Technologies": "0001037389"
+    "Point72 Asset Management": "0001603466"
+    "Berkshire Hathaway": "0001067983"
+    "Tiger Global Management": "0001167483"
+    "Coatue Management": "0001135730"
+    "Soros Fund Management": "0001029160"
+  default_quarters: 4
+
+transcripts:
+  # Transcripts are only fetched for explicitly requested / candidate tickers.
+  # Never for the entire universe.
+  # FMP /stable API (legacy /api/v3 was retired 2025-08-31). Used for both
+  # FMP financials and transcripts; the ticker is passed as a `symbol` param.
+  fmp_base_url: "https://financialmodelingprep.com/stable"
+
+providers:
+  # Provider priority by data domain. The registry selects the first
+  # provider whose required API key is present in .env, else falls back.
+  # FMP first: Polygon key downgraded to free tier (5 req/min) 2026-07;
+  # FMP EOD matches Polygon aggs to the cent (same adj_close = close convention).
+  prices: ["fmp", "polygon", "yfinance"]
+  fundamentals: ["fmp", "yfinance"]
+  transcripts: ["fmp"]
+  macro: ["fred"]
+  filings: ["sec"]
+  # Polygon's /stocks/v1/short-interest gives bi-monthly FINRA history;
+  # yfinance only offers today's snapshot and is the no-key fallback.
+  short_interest: ["polygon", "yfinance"]
+  # FMP's /stable/insider-trading/search returns multi-year Form-4 history;
+  # SEC EDGAR remains the fallback (90-day default lookback).
+  insiders: ["fmp", "sec"]
+  # FMP's /stable/earnings serves ~25y of announcement dates with frozen
+  # report-time EPS/revenue estimates; yfinance only offers ~24 rows.
+  earnings: ["fmp", "yfinance"]
+
+# ===========================================================================
+# Layer 2 - Factor Scoring Engine
+# ===========================================================================
+# All scoring is config-driven so factors, weights, and regimes can be tuned
+# without touching code. Weights must sum to 1.0 (validated at load time).
+factors:
+  # Minimum non-null observations within a GICS sector required to compute a
+  # percentile rank. Below this, the sub-factor is neutral (score 50) because a
+  # rank over too few peers is not meaningful.
+  min_sector_obs: 5
+
+  # Trailing calendar-day window for aggregating insider transactions. Widened to
+  # 180d so the continuous buy/sell signals populate more names (open-market
+  # activity is episodic; a longer window lifts coverage without materially
+  # staling the signal). See factors/insider.py.
+  insider_window_days: 180
+
+  # Production sub-factor set (named set from `factor_sets` below, or null for
+  # the full V1 set).
+  #   parent_selection_v4 — 2026-07-05: rank-and-diversify parent selection over
+  #     the 80-candidate research library (research/subfactor_expansion). Emits
+  #     ONLY the 3 subs each parent picked, weighted ∝ mean IC (3M/6M) with the
+  #     intra-parent weights baked into factors/parent_selection_v4.py. Parent-
+  #     level composite weights use `engine_weights` below (V4 IC/IR-blend, cap
+  #     25%). See output/parent_selection_expansion/REPORT.md and
+  #     output/parent_eval/REPORT.md for the derivation.
+  #   lean — legacy 2026-05 config: drops 15 negative-IR subs from V1 production
+  #     factors. Kept as a fallback so `--sub-factor-set lean` still works.
+  #   null / v1 / full — every sub each production factor emits.
+  # Every entry point (scoring, weight engine, backtest) defaults to this; a
+  # --sub-factor-set CLI flag overrides per-run.
+  sub_factor_set: parent_selection_v4
+
+  # Default composite weights (the "Normal" regime). Must sum to 1.0.
+  # This is also the STABLE PHILOSOPHY BASELINE the Factor Weight Engine tilts
+  # around — do NOT overwrite it with engine output, or the overlay would
+  # compound on an already-tilted anchor each run. Engine output lives in
+  # `engine_weights` below.
+  default_weights:
+    momentum:    0.25
+    quality:     0.20
+    value:       0.15
+    growth:      0.15
+    revisions:   0.15
+    insider:     0.04
+    short:       0.03
+    institutional: 0.03
+
+  # Score normalization — equalize each parent factor's cross-sectional dispersion
+  # BEFORE the weighted blend, so `weight` is the true influence lever. Without it,
+  # a wide-dispersion factor (Momentum, std ~26) silently out-votes a compressed
+  # one (Insider/Revisions, std ~12) even at equal weight: pull = weight × std, so
+  # Momentum drew ~40% of composite influence off ~31% weight (see
+  # output/factor_distribution/REPORT.md). `zscore` rescales every parent to a
+  # common std centered on 50, collapsing effective influence back onto weight.
+  #   none   — legacy behaviour (raw weighted blend of parent percentiles)
+  #   zscore — normalized: 50 + (parent-50)·(target_std/parent_std) per rebalance
+  # target_std is COSMETIC only (a global constant cancels in the sector re-rank);
+  # it just keeps composite_raw readable on a ~0-100 scale.
+  score_normalization: zscore
+  normalization_target_std: 20.0
+
+  # Production weights.
+  #
+  # Current source: **parent-eval V4 IC/IR-cap-25 % construction (2026-07-05)**.
+  # Derived from parent-level scorecard on 2023-01-01→2026-06-30 (42 monthly
+  # rebalances, expanded research library):
+  #   - Rank each parent by (mean_ic_3m6m / max_ic⁺) and (IR / max_ir⁺), both
+  #     clipped at 0. Combined score = 0.5·IC-rank + 0.5·IR-rank.
+  #   - Weight ∝ combined score. Water-fill cap 0.25 (redistribute excess
+  #     proportionally to under-cap parents). Renormalise.
+  #   - See scripts/parent_eval.py (variant V4) and output/parent_eval/REPORT.md
+  #     for the derivation; Growth+Momentum hit the 25 % cap.
+  # Legacy engine snapshot (min_periods=8, IC-walk-forward, 2026-06-01) preserved
+  # in git history for `--sub-factor-set lean` re-runs. Must sum to 1.0.
+  use_engine_weights: true
+  # 2026-09-01 METHOD EQEFF ("equal effective exposure"): w solves
+  # w ∝ C⁻¹·1 (correlation matrix inverse applied to a vector of ones), clipped
+  # ≥0 and renormalized to sum 1 — the nominal weight vector that makes every
+  # parent's EFFECTIVE exposure (C·w, own weight plus what correlated parents
+  # import) EQUAL, rather than capping the crowded ones (method B) or capping
+  # + flooring the outliers (method E, shipped 2026-08-31, superseded here).
+  # No IC/IR information is used at all — this is pure correlation-structure
+  # risk parity. Derivation: scripts/derive_engine_weights_eqeff.py; see
+  # factors/parent_selection_v4.py V4_PARENT_WEIGHTS for the full evidence
+  # trail (10-metric portfolio-agnostic scorecard across 14 tested configs —
+  # scripts/factor_scorecard.py, scripts/full_pit_backtest_10configs.py).
+  # Supersedes the 2026-08-31 method-E vector (preserved in git history).
+  engine_weights:
+    momentum:    0.0829
+    value:       0.2302
+    quality:     0.1717
+    growth:      0.1216
+    revisions:   0.0978
+    institutional: 0.0648
+    insider:     0.1562
+    short:       0.0748
+
+  # VIX-banded momentum tilt applied on top of whichever weight vector wins the
+  # precedence in resolve_weights (engine > regime table > static). Continuous
+  # piecewise-linear rule validated OOS 2026-07-13 (output/vixtilt_smooth/,
+  # variant lit_band): momentum ×1.25 / value ×0.75 at VIX<=13 fading out by 15;
+  # neutral 15-23; momentum ramps to a ×0.5 floor over VIX 23-27 with the freed
+  # weight going to quality+value. Constants live in factors/vix_tilt.py.
+  vix_tilt:
+    enabled: true
+
+  # Candidate classification by sector-relative composite percentile.
+  classification:
+    long_percentile:  80   # top 20% -> LONG
+    short_percentile: 20   # bottom 20% -> SHORT
+    # middle band -> WATCHLIST
+
+  # Regime-conditional weighting (opt-in via --regime-weights or this flag).
+  regime_conditional_weights: false
+  regime:
+    # VIX thresholds (close) that bucket the market into a volatility regime.
+    low_vol_max:  15.0   # VIX < 15        -> low_vol
+    high_vol_min: 25.0   # VIX > 25        -> high_vol
+    # 15 <= VIX <= 25                       -> normal
+    weights:
+      # Low vol: trend persists, reward momentum/growth, ease defensives.
+      low_vol:
+        momentum:    0.30
+        quality:     0.15
+        value:       0.12
+        growth:      0.18
+        revisions:   0.15
+        insider:     0.04
+        short:       0.03
+        institutional: 0.03
+      # Normal: the default blend.
+      normal:
+        momentum:    0.25
+        quality:     0.20
+        value:       0.15
+        growth:      0.15
+        revisions:   0.15
+        insider:     0.04
+        short:       0.03
+        institutional: 0.03
+      # High vol: defensives lead, reward quality/value, cut momentum.
+      high_vol:
+        momentum:    0.12
+        quality:     0.28
+        value:       0.22
+        growth:      0.08
+        revisions:   0.15
+        insider:     0.05
+        short:       0.05
+        institutional: 0.05
+
+  # Factor crowding detection (informational warnings only; never alter scores).
+  crowding:
+    quintile: 0.20              # top/bottom 20% baskets for synthetic returns
+    return_windows: [20, 60, 120]
+    high_correlation_threshold: 0.70   # |rolling corr| above this -> crowded pair
+    degenerate_neutral_fraction: 0.80  # >=80% of names scored 50 -> degenerate
+    sector_concentration_threshold: 0.40  # >40% of LONG basket in one sector
+    momentum_reversal_lookback: 20     # short window for reversal check
+
+  # Output paths (relative to project root).
+  output:
+    csv: "output/scored_universe_latest.csv"
+
+# ---------------------------------------------------------------------------
+# Named sub-factor sets (opt-in via --sub-factor-set / sub_factor_set=)
+# ---------------------------------------------------------------------------
+# These let the backtester switch between V1 (every sub-factor a parent emits
+# feeds the parent score — production behaviour, unchanged when no set is
+# named) and experimental subsets without modifying any factor module.
+#
+# Per-parent rules:
+#   * key absent / value null  -> "use every sub-factor of this parent" (V1)
+#   * value is a list of names -> "use only these sub-factor names"
+# An allowlist that matches none of a parent's emitted sub-factors raises so a
+# typo cannot silently collapse the parent to neutral.
+factor_sets:
+  # parent_selection_v4 — 2026-07-05 rank-and-diversify parent selection over the
+  # 80-candidate research library (research/subfactor_expansion, incl. new
+  # insider buy subs + PIT-window fix). Each parent takes the top-3 subs by
+  # within-bucket score (0.50·IC + 0.25·IR + 0.15·spread + 0.05·hit +
+  # 0.05·coverage, IC = 3M/6M mean); adds the next-best only if diversifying
+  # (R² < 0.60) and positive-IC, up to 3; weight ∝ mean IC capped 50 %,
+  # renormalised. Full derivation: output/parent_selection_expansion/REPORT.md.
+  #
+  # Wiring: activating this set makes factors/pipeline.py switch the factor
+  # registry to ALL_FACTORS_V4 (factors/parent_selection_v4.py), which sources
+  # these subs from the research subfactor library rather than the production
+  # factors/ modules. The `weight` values below are informational — the same
+  # numbers are the source-of-truth in factors/parent_selection_v4.SELECTED_SUBS
+  # (kept in sync manually so a stale config can't silently override the
+  # selection).
+  # Re-selected 2026-07-29 after the PIT-availability fixes (13F partial-quarter
+  # purge + ingest gate, short-interest settlement→dissemination lag, analyst-
+  # grades month-complete admission). Quality stops at 2 subs (next candidate's
+  # mean IC ≤ 0). Pre-fix outputs archived in output/pre_pit_fix_2026-07-29/.
+  parent_selection_v4:
+    momentum:
+      mom_vol_adjusted:               0.449
+      mom_6m:                         0.354
+      mom_52w_high_prox:              0.197
+    value:
+      val_shareholder_yield:          0.474
+      val_ev_revenue_inv:             0.418
+      val_buyback_yield:              0.107
+    quality:
+      qual_earnings_stability_3y:     0.500
+      qual_altman_z:                  0.500
+    growth:
+      grw_earnings_surprise:          0.409
+      grw_earnings_yoy:               0.324
+      grw_operating_income_growth:    0.267
+    revisions:
+      rev_rating_surprise_90d:        0.475
+      rev_raise_and_bullish_90d:      0.333
+      rev_target_revision_raw_30d:    0.192
+    institutional:
+      inst_investors_holding_change:  0.500
+      inst_new_positions:             0.495
+      inst_net_share_change:          0.005
+    insider:
+      ins_no_selling_flag:            0.500
+      ins_cluster_buyers_180d:        0.301
+      ins_sell_pressure_inv:          0.199
+    short:
+      si_short_pct_float:             0.421
+      si_days_to_cover:               0.408
+      si_short_pct_float_pctile_252d: 0.171
+
+  # V2-lite — strips ONLY the 10 sub-factors with strictly-negative trailing
+  # IR (≥40 monthly observations) from the IR study
+  # (output/subfactor_ic/ic_summary_by_ir.csv). Keeps every positive-IR
+  # signal, including redundant ones — the hypothesis is that the
+  # negative-IR sub-factors were the *only* thing actively hurting V1, and
+  # the redundancy among the positives is harmless because they all push
+  # the same direction.
+  v2_lite:
+    momentum:
+      # drop mom_acceleration (IR -0.10)
+      - mom_12_1
+      - mom_vol_adjusted
+      - mom_52w_high_proximity
+      - mom_6m
+      - mom_sector_rel_strength
+      - mom_3m
+    value:
+      # drop val_fcf_yield (IR -0.19)
+      - val_sales_to_ev
+      - val_shareholder_yield
+      - val_ev_ebitda_inv
+      - val_book_to_price
+    quality:
+      # drop 7 negative-IR quality sub-factors: qual_cfo_to_ni, qual_roe_stability,
+      # qual_roe, qual_gross_margin, qual_gross_margin_trend, qual_debt_to_equity_inv,
+      # qual_accruals_inv
+      - qual_altman_z
+      - qual_piotroski_f
+    growth:
+      # drop grw_rd_intensity (IR -0.02)
+      - grw_earnings_yoy
+      - grw_revenue_cagr_3y
+      - grw_fcf_yoy
+      - grw_revenue_acceleration
+      - grw_revenue_yoy
+    # institutional: keep all 5 — every sub-factor has positive IR
+    # revisions / short / insider: not enumerated (no historical data anyway)
+
+  # V2 — research-driven keep list from the sub-factor IR study
+  # (output/subfactor_ic/ic_summary_by_ir.csv). Removes 8 negative-IR
+  # sub-factors and the most redundant high-IC-correlation pairs.
+  # revisions / short / insider are NOT enumerated — they keep all their
+  # sub-factors; without historical data those parents fall back to
+  # neutral 50 inside the engine (no behavioural change vs V1).
+  v2:
+    momentum:
+      - mom_12_1
+      - mom_vol_adjusted
+      - mom_52w_high_proximity
+    value:
+      - val_sales_to_ev
+      - val_shareholder_yield
+    quality:
+      - qual_altman_z
+      - qual_piotroski_f
+    growth:
+      - grw_earnings_yoy
+      - grw_revenue_cagr_3y
+      - grw_fcf_yoy
+    institutional:
+      - inst_net_share_change
+      - inst_high_conviction
+      - inst_multi_fund_open
+      - inst_fund_count
+      - inst_new_positions
+
+  # lean — drops EXACTLY the 15 sub-factors the research framework verdicts as
+  # "Remove" (output/factor_research/subfactor_summary.csv: non-positive trailing
+  # IR with no lift to the parent, or actively drags it). 29 of 44 kept. Unlike
+  # v2 it does NOT additionally fold redundant Keep pairs, so it isolates the
+  # effect of removing the noise alone. short / revisions / institutional are
+  # not enumerated (no Remove verdicts there) so they keep every sub-factor.
+  lean:
+    momentum:
+      # drop mom_sector_rel_strength, mom_3m, mom_acceleration
+      - mom_12_1
+      - mom_6m
+      - mom_52w_high_proximity
+      - mom_vol_adjusted
+    value:
+      # drop val_fcf_yield
+      - val_book_to_price
+      - val_ev_ebitda_inv
+      - val_shareholder_yield
+      - val_sales_to_ev
+    quality:
+      # drop the 7 negative-IR quality subs
+      - qual_altman_z
+      - qual_piotroski_f
+    growth:
+      # drop grw_fcf_yoy, grw_rd_intensity, grw_revenue_yoy
+      - grw_earnings_yoy
+      - grw_revenue_acceleration
+      - grw_revenue_cagr_3y
+    insider:
+      # Rebuilt for dispersion (factors/insider.py): continuous flow + buy/sell
+      # ratio populate ~90% of names; the rare conviction patterns are folded
+      # into one combined flag. Keep all three.
+      - ins_net_dollar_flow
+      - ins_buy_sell_ratio
+      - ins_high_conviction_buy
+
+  # --- Per-parent ablation variants ---------------------------------------
+  # Each removes ONLY the negative-IR sub-factor(s) of one parent and leaves
+  # every other parent at V1 (all sub-factors). Used to isolate which parent's
+  # noisy subs were dragging V1.
+
+  # Quality: drop the 7 strictly-negative-IR subs
+  # (qual_roe -0.236, qual_gross_margin -0.256, qual_gross_margin_trend -0.292,
+  # qual_cfo_to_ni -0.103, qual_roe_stability -0.125, qual_accruals_inv -0.077,
+  # qual_debt_to_equity_inv -0.066). Keeps qual_altman_z + qual_piotroski_f.
+  v1_minus_neg_quality:
+    quality:
+      - qual_altman_z
+      - qual_piotroski_f
+
+  # Momentum: drop mom_acceleration (IR -0.10). Keep the other 6 subs.
+  v1_minus_neg_momentum:
+    momentum:
+      - mom_12_1
+      - mom_6m
+      - mom_3m
+      - mom_52w_high_proximity
+      - mom_sector_rel_strength
+      - mom_vol_adjusted
+
+  # Value: drop val_fcf_yield (IR -0.19). Keep the other 4 subs.
+  v1_minus_neg_value:
+    value:
+      - val_book_to_price
+      - val_ev_ebitda_inv
+      - val_shareholder_yield
+      - val_sales_to_ev
+
+  # Growth: drop grw_rd_intensity (IR -0.02). Keep the other 5 subs.
+  v1_minus_neg_growth:
+    growth:
+      - grw_revenue_yoy
+      - grw_earnings_yoy
+      - grw_fcf_yoy
+      - grw_revenue_acceleration
+      - grw_revenue_cagr_3y
+
+# ---------------------------------------------------------------------------
+# Canonical sub-factor direction spec (Factor Direction Audit, 2026-06-28)
+# ---------------------------------------------------------------------------
+# Single source of truth for the *economic* direction of every sub-factor: does
+# a higher RAW value mean a better (more bullish for a long book) stock?
+#
+# This MIRRORS the hardcoded ``higher_is_better`` flag each Factor.compute()
+# passes to ``sector_percentile`` (factors/utils.py) — the one and only place
+# direction is applied. The audit verified every entry against the raw metric's
+# Layer 1 definition; no sign bugs were found. Keep this spec and the code flags
+# in lock-step. See output/factor_research/FACTOR_DIRECTION_AUDIT.md.
+#
+# direction:
+#   higher_better -> higher_is_better=True   (raw ascending -> high percentile)
+#   lower_better  -> higher_is_better=False  (inversion required; low raw wins)
+#   conditional   -> sign is economically ambiguous; current code scores it the
+#                    listed `scored_as` way, but treat with care / sector-aware.
+#   neutral       -> no directional view (none currently).
+# inversion_required is shorthand for direction == lower_better.
+factor_directions:
+  momentum:
+    mom_12_1:                {raw: "12-1 month price return",                direction: higher_better, scored_as: higher_better, inversion_required: false}
+    mom_6m:                  {raw: "6-month price return",                   direction: higher_better, scored_as: higher_better, inversion_required: false}
+    mom_3m:                  {raw: "3-month price return",                   direction: higher_better, scored_as: higher_better, inversion_required: false}
+    mom_acceleration:        {raw: "recent-quarter minus prior-quarter return", direction: conditional, scored_as: higher_better, inversion_required: false, note: "accelerating momentum often mean-reverts; weakest momentum sub (Removed in validation)"}
+    mom_52w_high_proximity:  {raw: "distance_from_52w_high = close/52w_high - 1 (<=0; 0 at the high)", direction: higher_better, scored_as: higher_better, inversion_required: false, note: "raw is SIGNED (negative below the high), so higher_better is correct"}
+    mom_sector_rel_strength: {raw: "60d return minus GICS-sector mean 60d return", direction: higher_better, scored_as: higher_better, inversion_required: false}
+    mom_vol_adjusted:        {raw: "12-1 return / 20d volatility",           direction: higher_better, scored_as: higher_better, inversion_required: false}
+  value:
+    val_book_to_price:       {raw: "shareholder equity / market cap",        direction: higher_better, scored_as: higher_better, inversion_required: false, note: "yield framing: higher = cheaper"}
+    val_fcf_yield:           {raw: "free cash flow / market cap",            direction: higher_better, scored_as: higher_better, inversion_required: false}
+    val_ev_ebitda_inv:       {raw: "EBITDA / EV (yield form; EV<=0 masked)",  direction: higher_better, scored_as: higher_better, inversion_required: false, note: "yield framing so negative EBITDA sorts worst; the old inverted multiple sign-flipped on negative EBITDA"}
+    val_shareholder_yield:   {raw: "(buybacks + dividends) / market cap",    direction: higher_better, scored_as: higher_better, inversion_required: false, note: "raw negated upstream (outflows stored negative) — unit normalization, not a direction inversion"}
+    val_sales_to_ev:         {raw: "revenue / enterprise value",             direction: higher_better, scored_as: higher_better, inversion_required: false}
+  quality:
+    qual_roe:                {raw: "return on equity (equity<=0 masked)",    direction: higher_better, scored_as: higher_better, inversion_required: false, note: "masked when equity<=0: negative NI over negative equity reads as positive ROE"}
+    qual_roe_stability:      {raw: "std-dev of annual ROE",                  direction: lower_better,  scored_as: lower_better,  inversion_required: true,  note: "stable ROE preferred"}
+    qual_gross_margin:       {raw: "gross margin",                           direction: higher_better, scored_as: higher_better, inversion_required: false}
+    qual_gross_margin_trend: {raw: "latest-minus-earliest gross margin",     direction: higher_better, scored_as: higher_better, inversion_required: false}
+    qual_cfo_to_ni:          {raw: "operating cash flow / net income (NI<=0 masked)", direction: higher_better, scored_as: higher_better, inversion_required: false, note: "earnings backed by cash; masked when NI<=0 (ratio sign flips)"}
+    qual_accruals_inv:       {raw: "(net income - operating cash flow) / total assets", direction: lower_better, scored_as: lower_better, inversion_required: true, note: "high accruals = low earnings quality"}
+    qual_debt_to_equity_inv: {raw: "debt / |equity| (equity=0 masked)",      direction: lower_better,  scored_as: lower_better,  inversion_required: true,  note: "lower leverage healthier; |equity| keeps negative-equity names penalized instead of sign-flipping to best"}
+    qual_piotroski_f:        {raw: "Piotroski F-score (0-9)",                direction: higher_better, scored_as: higher_better, inversion_required: false}
+    qual_altman_z:           {raw: "Altman Z-score (NaN for Financials/Real Estate)", direction: higher_better, scored_as: higher_better, inversion_required: false}
+  growth:
+    grw_revenue_yoy:         {raw: "revenue growth YoY",                     direction: higher_better, scored_as: higher_better, inversion_required: false}
+    grw_earnings_yoy:        {raw: "EPS growth YoY",                         direction: higher_better, scored_as: higher_better, inversion_required: false}
+    grw_fcf_yoy:             {raw: "free cash flow growth YoY",              direction: higher_better, scored_as: higher_better, inversion_required: false}
+    grw_revenue_acceleration: {raw: "change in YoY revenue growth rate",     direction: higher_better, scored_as: higher_better, inversion_required: false}
+    grw_revenue_cagr_3y:     {raw: "3-year revenue CAGR",                    direction: higher_better, scored_as: higher_better, inversion_required: false}
+    grw_rd_intensity:        {raw: "R&D expense / revenue",                  direction: conditional,   scored_as: higher_better, inversion_required: false, note: "innovation vs cash-burn — direction is sector-dependent; Removed in validation"}
+  revisions:
+    rev_rating_change_30d:   {raw: "net analyst-rating change, 30d",         direction: higher_better, scored_as: higher_better, inversion_required: false}
+    rev_rating_change_90d:   {raw: "net analyst-rating change, 90d",         direction: higher_better, scored_as: higher_better, inversion_required: false}
+    rev_pt_momentum:         {raw: "consensus price-target momentum",        direction: higher_better, scored_as: higher_better, inversion_required: false}
+    rev_pt_target_upside_30d: {raw: "price-target implied upside, 30d",      direction: higher_better, scored_as: higher_better, inversion_required: false}
+    rev_pt_upgrade_ratio_30d: {raw: "share of upgrades, 30d",               direction: higher_better, scored_as: higher_better, inversion_required: false}
+  short:
+    si_short_pct_float:      {raw: "short interest as % of float",           direction: lower_better,  scored_as: lower_better,  inversion_required: true,  note: "long-book convention: less short pressure favorable"}
+    si_days_to_cover:        {raw: "days to cover (short / avg volume)",     direction: lower_better,  scored_as: lower_better,  inversion_required: true}
+    si_short_interest_change: {raw: "change in short % of float (positive = rising shorts)", direction: lower_better, scored_as: lower_better, inversion_required: true, note: "conditional caveat: rising/unwinding shorts can fuel squeezes"}
+  insider:
+    ins_net_dollar_flow:     {raw: "signed insider $ flow (buys + 0.5*sells)", direction: higher_better, scored_as: higher_better, inversion_required: false}
+    ins_buy_sell_ratio:      {raw: "buy$ / (buy$ + sell$) over window, [0,1]", direction: higher_better, scored_as: higher_better, inversion_required: false, note: "wide-coverage balance signal; populated for any name with open-market activity"}
+    ins_high_conviction_buy: {raw: "combined flag: CEO/CFO buy OR >=3 buyers OR >=$1M buy", direction: higher_better, scored_as: higher_better, inversion_required: false}
+  institutional:
+    inst_fund_count:         {raw: "number of 13F funds holding",            direction: higher_better, scored_as: higher_better, inversion_required: false}
+    inst_net_share_change:   {raw: "net 13F share change",                   direction: higher_better, scored_as: higher_better, inversion_required: false}
+    inst_new_positions:      {raw: "count of new 13F positions",             direction: higher_better, scored_as: higher_better, inversion_required: false}
+    inst_multi_fund_open:    {raw: ">=2 funds opened a position (binary)",   direction: higher_better, scored_as: higher_better, inversion_required: false}
+    inst_high_conviction:    {raw: "count of 13F position increases",        direction: higher_better, scored_as: higher_better, inversion_required: false}

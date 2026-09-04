@@ -1,0 +1,12 @@
+[
+  {"name": "r5a_hardstop05", "idea": "hard stop from entry TIGHTER than the trailing stop (5% vs peak-based 10%) - catches straight-down drops faster than trailing-from-peak can",
+   "config": {"hard_stop_pct": 0.05}},
+  {"name": "r5b_hardstop08", "idea": "hard stop from entry at 8% (still tighter than trail's 10%)",
+   "config": {"hard_stop_pct": 0.08}},
+  {"name": "r5c_minvalue40", "idea": "new lever: only buy names that also clear the 40th percentile on Value (cheapness) - avoid overpaying for high composite scores",
+   "config": {"min_value_pct": 40.0}},
+  {"name": "r5d_minvalue60", "idea": "stricter Value floor (60th percentile) - only buy names that are both top-ranked AND reasonably priced",
+   "config": {"min_value_pct": 60.0}},
+  {"name": "r5e_cap9m", "idea": "fine grid: 9M time cap (between untested and baseline 12M)",
+   "config": {"cap_months": 9}}
+]

@@ -1,0 +1,8 @@
+[
+  {"name": "r19a_regularized_a", "idea": "stability check: round-number config near the dense good cluster (trail=10%, cap=7, Value floor=20, no take-profit) instead of the knife-edge-optimized values found so far",
+   "config": {"trail_pct": 0.10, "cap_months": 7, "min_value_pct": 20.0, "take_profit_pct": null}},
+  {"name": "r19b_regularized_b", "idea": "stability check: same idea, cap=8 instead of 7",
+   "config": {"trail_pct": 0.10, "cap_months": 8, "min_value_pct": 20.0, "take_profit_pct": null}},
+  {"name": "r19c_regularized_c", "idea": "stability check: same idea, Value floor=15 instead of 20",
+   "config": {"trail_pct": 0.10, "cap_months": 7, "min_value_pct": 15.0, "take_profit_pct": null}}
+]

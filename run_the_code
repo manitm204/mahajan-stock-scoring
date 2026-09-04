@@ -1,0 +1,27 @@
+ # 0. one-time: API keys
+  cp .env.example .env && $EDITOR .env        # FMP, Polygon, SEC, Anthropic, Alpaca
+
+  # 1. Layer 1 — pull latest data into cache/mahajan.db
+  python run_data.py
+
+  # 2. Layer 2 — composite ranking (writes composite_scores)
+  python run_scoring.py
+
+  # 3. Layer 3 — Claude review of the top names
+  #    --full-run + --top-n 10 already feeds top 10 LONG + top 10 SHORT to Claude
+  python run_analysis.py --full-run --top-n 10
+
+  # 4. Layer 4 — build target book + persist positions
+  python run_portfolio.py --propose --commit
+  python run_portfolio.py --rebalance --commit
+
+  # 5. Layer 5 — risk monitor + cache/risk_state.json
+  python run_risk_check.py --all
+
+  # 6. Layer 6 — preview, then execute against Alpaca paper
+  EXECUTION_ENABLED=1 python run_execution.py --dry-run
+  EXECUTION_ENABLED=1 python run_execution.py --execute
+
+  # 7. Layer 7 — dashboard
+  pip install streamlit plotly
+  python run_dashboard.py

@@ -1,0 +1,8 @@
+[
+  {"name": "r113a_mv15", "idea": "robustness: Value floor 15 (neighbor of the near-tied alt pick's 18)",
+   "config": {"min_value_pct": 15.0}},
+  {"name": "r113b_mv20", "idea": "robustness: Value floor 20",
+   "config": {"min_value_pct": 20.0}},
+  {"name": "r113c_mv22", "idea": "robustness: Value floor 22",
+   "config": {"min_value_pct": 22.0}}
+]

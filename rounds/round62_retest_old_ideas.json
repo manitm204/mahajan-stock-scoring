@@ -1,0 +1,22 @@
+[
+  {"name": "r62a_k7", "idea": "retest: k=7 failed alone at the old baseline (0.911) - does it work now with rank-floor + min-hold in place?",
+   "config": {"k": 7}},
+  {"name": "r62b_k8", "idea": "retest: k=8 was close-but-failed multiple times at the old baseline",
+   "config": {"k": 8}},
+  {"name": "r62c_minvalue18", "idea": "retest: Value-cheapness floor (18th pct) was a real winner in the v1 search, never tried combined with rank-floor/min-hold",
+   "config": {"min_value_pct": 18.0}},
+  {"name": "r62d_minvalue10", "idea": "retest: looser Value floor (10th pct), also a v1 near-winner",
+   "config": {"min_value_pct": 10.0}},
+  {"name": "r62e_takeprofit50", "idea": "retest: 50% take-profit was a v1 winner (paired with the Value floor there)",
+   "config": {"take_profit_pct": 0.50}},
+  {"name": "r62f_sectorcap3", "idea": "retest: sector cap 3, always neutral before - check again with the new exit rules changing which names get held",
+   "config": {"max_per_sector": 3}},
+  {"name": "r62g_hardstop15", "idea": "retest: 15% hard stop from entry, always inert before (trail always fired first) - recheck now that trail interacts with rank floor",
+   "config": {"hard_stop_pct": 0.15}},
+  {"name": "r62h_scorefloor30", "idea": "retest: absolute score floor 30 (different from the new rank-floor mechanism, worth rechecking both exist together)",
+   "config": {"score_floor": 30.0}},
+  {"name": "r62i_cap12", "idea": "retest: reverting the cap back to the original 12M to isolate how much of the val gain is actually the cap vs the newer rank-floor/min-hold",
+   "config": {"cap_months": 12}},
+  {"name": "r62j_trail13", "idea": "retest: looser 13% trail, failed badly alone at the old baseline (0.493) - recheck with min-hold now guarding the early whipsaw window",
+   "config": {"trail_pct": 0.13}}
+]

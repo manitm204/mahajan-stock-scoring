@@ -1,0 +1,12 @@
+[
+  {"name": "r18a_trail103", "idea": "robustness check: trail 10.3% - is the 10.5% jump a real region or a knife-edge fluke on one trade's exact exit price?",
+   "config": {"trail_pct": 0.103}},
+  {"name": "r18b_trail107", "idea": "robustness check: trail 10.7%",
+   "config": {"trail_pct": 0.107}},
+  {"name": "r18c_trail110", "idea": "robustness check: trail 11.0% (already tested standalone earlier at a different base, retest here)",
+   "config": {"trail_pct": 0.110}},
+  {"name": "r18d_trail095", "idea": "robustness check: trail 9.5% (just below champion's old 10%, opposite direction)",
+   "config": {"trail_pct": 0.095}},
+  {"name": "r18e_mv22_trail105_cap9", "idea": "combine the new trail=10.5% with the earlier-good cap=9",
+   "config": {"cap_months": 9}}
+]

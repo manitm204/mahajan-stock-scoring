@@ -1,0 +1,12 @@
+[
+  {"name": "r17a_notrail_hardstop20_tp50", "idea": "follow-up on r16a's high val Sharpe: loosen the flat stop to 20% (15% may have been whipsawing on train)",
+   "config": {"trail_pct": null, "hard_stop_pct": 0.20}},
+  {"name": "r17b_notrail_hardstop15_tp30", "idea": "follow-up on r16a: keep the 15% flat stop but tighten take-profit to 30% (lock in gains sooner)",
+   "config": {"trail_pct": null, "hard_stop_pct": 0.15, "take_profit_pct": 0.30}},
+  {"name": "r17c_notrail_hardstop20_tp50_cap9", "idea": "follow-up on r16a: loosen stop to 20% AND extend cap to 9M (r16a's short holds may have hurt train)",
+   "config": {"trail_pct": null, "hard_stop_pct": 0.20, "cap_months": 9}},
+  {"name": "r17d_mv22_trail10p5", "idea": "very fine grid around champion's trail (10.5%)",
+   "config": {"trail_pct": 0.105}},
+  {"name": "r17e_mv22_minhold025", "idea": "very small min-hold (2 weeks) - minimal whipsaw guard without the damage seen at 0.5-1 month",
+   "config": {"min_hold_months": 0.25}}
+]

@@ -1,0 +1,12 @@
+[
+  {"name": "r2a_sectorcap3", "idea": "cap 3 names per GICS sector - force diversification, still 10% trail",
+   "config": {"max_per_sector": 3}},
+  {"name": "r2b_takeprofit30", "idea": "add a 30% take-profit on top of the trailing stop - lock in big winners",
+   "config": {"take_profit_pct": 0.30}},
+  {"name": "r2c_hardstop15", "idea": "add a 15% hard stop from entry (catches a fast drop before it ever sets a high peak)",
+   "config": {"hard_stop_pct": 0.15}},
+  {"name": "r2d_cap6m", "idea": "shorter 6M time cap - force turnover even if trailing stop never fires",
+   "config": {"cap_months": 6}},
+  {"name": "r2e_cap18m", "idea": "longer 18M time cap - let compounding winners keep running",
+   "config": {"cap_months": 18}}
+]

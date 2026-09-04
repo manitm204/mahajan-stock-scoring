@@ -1,0 +1,12 @@
+[
+  {"name": "r16a_notrail_hardstop15_tp50", "idea": "structural test: drop the peak-based trailing stop entirely, use only a flat -15% stop and the existing +50% take-profit from entry",
+   "config": {"trail_pct": null, "hard_stop_pct": 0.15}},
+  {"name": "r16b_trail08_mv22", "idea": "tighter trail (8%) combined with current champion",
+   "config": {"trail_pct": 0.08}},
+  {"name": "r16c_mv22_k10_cap7_entrykwide", "idea": "widen entry candidate pool (entry_rank_k=25) - only matters combined with a filter, so this tests whether a wider pre-filter pool changes which names clear the Value floor",
+   "config": {"entry_rank_k": 25}},
+  {"name": "r16d_mv22_hardstop25", "idea": "very loose 25% hard stop layered on top (should rarely if ever bind, sanity double-check)",
+   "config": {"hard_stop_pct": 0.25}},
+  {"name": "r16e_mv22_cap11", "idea": "fine grid: cap=11 (between the failed cap=9/cap=8 combos and untested 11)",
+   "config": {"cap_months": 11}}
+]

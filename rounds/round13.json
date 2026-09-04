@@ -1,0 +1,12 @@
+[
+  {"name": "r13a_takeprofit45", "idea": "fine grid around the close take-profit-50 result",
+   "config": {"take_profit_pct": 0.45}},
+  {"name": "r13b_takeprofit60", "idea": "fine grid: looser 60% take-profit",
+   "config": {"take_profit_pct": 0.60}},
+  {"name": "r13c_takeprofit50_cap8", "idea": "combine the close take-profit-50 with cap=8",
+   "config": {"take_profit_pct": 0.50, "cap_months": 8}},
+  {"name": "r13d_takeprofit50_trail12", "idea": "combine take-profit-50 with a slightly looser 12% trail",
+   "config": {"take_profit_pct": 0.50, "trail_pct": 0.12}},
+  {"name": "r13e_takeprofit50_minvalue22", "idea": "combine take-profit-50 with a slightly stricter Value floor (22)",
+   "config": {"take_profit_pct": 0.50, "min_value_pct": 22.0}}
+]

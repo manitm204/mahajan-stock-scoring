@@ -1,0 +1,12 @@
+[
+  {"name": "r6a_cap7m", "idea": "fine grid around new champion: 7M cap",
+   "config": {"cap_months": 7}},
+  {"name": "r6b_cap8m", "idea": "fine grid around new champion: 8M cap",
+   "config": {"cap_months": 8}},
+  {"name": "r6c_cap10m", "idea": "fine grid around new champion: 10M cap",
+   "config": {"cap_months": 10}},
+  {"name": "r6d_cap9_k8", "idea": "combine new 9M cap with the earlier close-but-failed k=8",
+   "config": {"k": 8}},
+  {"name": "r6e_cap9_trail09", "idea": "combine new 9M cap with fine-grid trail 9% (also close-but-failed at cap=12)",
+   "config": {"trail_pct": 0.09}}
+]

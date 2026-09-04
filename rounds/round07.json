@@ -1,0 +1,12 @@
+[
+  {"name": "r7a_cap7_rankfloor60", "idea": "combine 7M cap with the earlier close-but-failed rank floor (worst 40%)",
+   "config": {"rank_floor_pct": 0.60}},
+  {"name": "r7b_cap7_scorefloor30", "idea": "combine 7M cap with the earlier close-but-failed score floor 30",
+   "config": {"score_floor": 30.0}},
+  {"name": "r7c_cap7_k8", "idea": "combine 7M cap with k=8 (was close to winning under cap=9)",
+   "config": {"k": 8}},
+  {"name": "r7d_cap7_k9", "idea": "fine grid: k=9 under the new 7M cap champion",
+   "config": {"k": 9}},
+  {"name": "r7e_cap7_minhold05", "idea": "half-month minimum hold under 7M cap - small whipsaw guard without the trail07/minhold1 damage seen earlier",
+   "config": {"min_hold_months": 0.5}}
+]

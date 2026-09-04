@@ -1,0 +1,12 @@
+[
+  {"name": "r14a_tp50_mv22_cap9", "idea": "val has been eroding for 3 rounds while train climbs - try reverting cap back toward 9M (better val earlier) while keeping the value floor + take-profit",
+   "config": {"cap_months": 9}},
+  {"name": "r14b_tp50_mv22_trail09", "idea": "tighter trail (9%) to see if it recovers val without hurting train",
+   "config": {"trail_pct": 0.09}},
+  {"name": "r14c_tp50_mv22_minhold05", "idea": "small min-hold guard on top of the current champion",
+   "config": {"min_hold_months": 0.5}},
+  {"name": "r14d_tp40_mv22", "idea": "slightly tighter take-profit (40 vs 50) - locks in gains a bit sooner",
+   "config": {"take_profit_pct": 0.40}},
+  {"name": "r14e_tp50_mv22_k11", "idea": "fine grid: k=11 (between baseline 10 and the failed-alone k=12)",
+   "config": {"k": 11}}
+]

@@ -1,0 +1,6 @@
+[
+  {"name": "rv3a_cap8", "idea": "robustness: cap=8 (neighbor of the v3 champion's cap=9)",
+   "config": {"cap_months": 8}},
+  {"name": "rv3b_cap10", "idea": "robustness: cap=10",
+   "config": {"cap_months": 10}}
+]
