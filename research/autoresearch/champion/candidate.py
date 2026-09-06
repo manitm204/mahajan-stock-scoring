@@ -1,4 +1,58 @@
-"""AUTORESEARCH CANDIDATE -- session 3 round 67: grid HOLD=4/REFRESH_N=2 under momentum-eviction"""
+"""AUTORESEARCH CANDIDATE -- this is the ONLY file the research agent may
+modify. Everything else in research/autoresearch/ (evaluate.py, program.md,
+results.tsv) and the correctness tests in tests/test_autoresearch_evaluate.py
+are fixed: data loading, dev/val/holdout date boundaries, T+1 execution,
+transaction costs, return/metric/score calculation, and leakage tests all
+live outside this file and cannot be changed from here.
+
+Contract
+--------
+    generate_targets(context) -> pd.DataFrame
+
+`context` exposes exactly three read-only attributes -- nothing else, ever:
+    context.rebal_dates : tuple[str]  monthly PIT signal dates (2020-01 -> 2026-06)
+    context.comp         : {date -> pd.Series(ticker -> 0-100 composite score)}
+                            already point-in-time correct, read-only
+    context.k            : int, default book size (10)
+
+No prices. No returns. No performance results of any kind, for any period
+(dev, val, or the locked 2025+ holdout) -- so there is nothing here to
+overfit a holdout to even in principle.
+
+Must return a long-format DataFrame with columns:
+    date    (str, must be one of context.rebal_dates)
+    ticker  (str)
+    weight  (float, target PORTFOLIO weight as of that decision date)
+
+------------------------------------------------------------------------
+Current champion (session 3, round 67 of 2026-09-06, 146 candidates tried
+this session on top of 49 from sessions 1-2, research_score = min(dev_ir,
+val_ir) vs SPY, strict promotion rule):
+
+  - top 10 names by composite score
+  - THREE overlapping sleeves, each held 4 months (round 67; was 6 months
+    in sessions 1-2 -- session 3 retested the full HOLD_MONTHS sweep under
+    momentum-eviction, since the original sweep in session 1 predated it,
+    and 4 turned out to beat 6 once combined with REFRESH_N=2)
+  - at each reform, replace the 2 held names with the LARGEST score DECLINE
+    since the sleeve's own last reform (4 months ago) -- not just the
+    absolute worst-ranked names this month (round 36, session 2). A name
+    whose score has risen since last review is never evicted purely for
+    being the lowest-ranked of the 10; eviction targets genuine
+    deterioration.
+  - equal weighting within each sleeve (1/3 of NAV / 10 names once ramped)
+  - costs and T+1 execution are handled entirely by evaluate.py
+
+research_score history: baseline 0.253 -> HOLD_MONTHS=6 (session 1, round 3)
+0.302 -> worst-rank partial rotation (round 9) 0.362 -> momentum-eviction
+(session 2, round 36) 0.585 -> HOLD_MONTHS=4 + REFRESH_N=2 under
+momentum-eviction (session 3, round 67) 1.060. 146 other session-3 ideas
+(finer HOLD/REFRESH_N grids, decline-metric variants, no-recycle memory,
+adaptive/buffered refresh counts, multi-horizon sleeves, percentile/entry
+floors, tenure locks, calendar-skip rules, etc.) were all tried and
+rejected -- see session_log.md for the full round-by-round table across
+all three sessions.
+"""
 from __future__ import annotations
 
 import pandas as pd

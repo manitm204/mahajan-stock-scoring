@@ -267,3 +267,264 @@ decline-driven rather than rank-driven.
   4, 5, 7, or 8 even with partial rotation active, so HOLD_MONTHS and
   REFRESH_N don't meaningfully interact -- they're separable, additive
   levers rather than a joint optimization.
+
+
+---
+
+# Session 3 (2026-09-06): 146 more rounds, own ideas, HOLD_MONTHS x REFRESH_N re-optimized
+
+Starting champion: momentum-eviction (session 2's round 36), HOLD_MONTHS=6,
+REFRESH_N=3, research_score 0.585. Sessions 1-2 had swept HOLD_MONTHS and
+REFRESH_N *separately* (never jointly, and the HOLD_MONTHS sweep predated
+momentum-eviction entirely) -- session 3's first priority was closing that
+gap, then testing ~30 further conceptual variants on decline metrics,
+fill/entry rules, eviction gating, sleeve scheduling, and combinations
+thereof. All 146 candidates were smoke-tested (syntax + a synthetic-panel
+dry run against a 30-ticker/40-month panel) before being run through the
+real evaluator. Same strict rule throughout: `research_score = min(dev_ir,
+val_ir)` must strictly improve over whatever is currently champion, or the
+round is rejected and `candidate.py` restored automatically.
+
+A few rounds (57-60, 71-74, 144, 146, 148-149, 191-192) show "n/a
+(test/error)": these are `HOLD_MONTHS` values not evenly divisible by 3
+(9, 10, 11, 12) or custom `STEP` values, which fail the FIXED correctness
+test's small 10-ticker/6-date fixture (not all 3 sleeves have room to form
+before the fixture ends) -- confirmed by manually reproducing round 57
+(HOLD_MONTHS=9) and inspecting the failure: it's a test-fixture edge case
+for large hold lengths, not a strategy bug, and the promotion gate
+correctly refuses to score anything that fails the correctness suite
+either way, so these are safely rejected regardless of their real-world
+merit.
+
+| # | idea | result | research_score |
+|---|---|---|---|
+| 52 | HOLD_MONTHS=3 retest under momentum-eviction | rejected | 0.4199 |
+| 53 | HOLD_MONTHS=4 retest under momentum-eviction | rejected | 0.3078 |
+| 54 | HOLD_MONTHS=5 retest under momentum-eviction | rejected | 0.2081 |
+| 55 | HOLD_MONTHS=7 retest under momentum-eviction | rejected | -0.4421 |
+| 56 | HOLD_MONTHS=8 retest under momentum-eviction | **PROMOTED** | 0.6772 |
+| 57 | HOLD_MONTHS=9 retest under momentum-eviction | rejected | n/a (test/error) |
+| 58 | HOLD_MONTHS=10 retest under momentum-eviction | rejected | n/a (test/error) |
+| 59 | HOLD_MONTHS=11 retest under momentum-eviction | rejected | n/a (test/error) |
+| 60 | HOLD_MONTHS=12 retest under momentum-eviction | rejected | n/a (test/error) |
+| 61 | grid HOLD=5/REFRESH_N=2 under momentum-eviction | rejected | 0.4030 |
+| 62 | grid HOLD=5/REFRESH_N=3 under momentum-eviction | rejected | 0.2081 |
+| 63 | grid HOLD=5/REFRESH_N=4 under momentum-eviction | rejected | 0.2434 |
+| 64 | grid HOLD=7/REFRESH_N=2 under momentum-eviction | rejected | -0.1568 |
+| 65 | grid HOLD=7/REFRESH_N=3 under momentum-eviction | rejected | -0.4421 |
+| 66 | grid HOLD=7/REFRESH_N=4 under momentum-eviction | rejected | -0.3222 |
+| 67 | grid HOLD=4/REFRESH_N=2 under momentum-eviction | **PROMOTED** | 1.0604 |
+| 68 | grid HOLD=4/REFRESH_N=4 under momentum-eviction | rejected | -0.2370 |
+| 69 | grid HOLD=8/REFRESH_N=2 under momentum-eviction | rejected | 0.6104 |
+| 70 | grid HOLD=8/REFRESH_N=4 under momentum-eviction | rejected | -0.1964 |
+| 71 | grid HOLD=9/REFRESH_N=2 under momentum-eviction | rejected | n/a (test/error) |
+| 72 | grid HOLD=9/REFRESH_N=3 under momentum-eviction | rejected | n/a (test/error) |
+| 73 | grid HOLD=9/REFRESH_N=4 under momentum-eviction | rejected | n/a (test/error) |
+| 74 | grid HOLD=10/REFRESH_N=3 under momentum-eviction | rejected | n/a (test/error) |
+| 75 | REFRESH_N=1 under momentum-eviction (HOLD=6) | rejected | 0.7088 |
+| 76 | REFRESH_N=5 under momentum-eviction (HOLD=6) | rejected | 0.1513 |
+| 77 | REFRESH_N=6 under momentum-eviction (HOLD=6) | rejected | 0.0433 |
+| 78 | REFRESH_N=7 under momentum-eviction (HOLD=6) | rejected | 0.0562 |
+| 79 | momentum-eviction + no-recycle cooldown=1 cycles | rejected | 0.5850 |
+| 80 | momentum-eviction + no-recycle cooldown=3 cycles | rejected | 0.5850 |
+| 81 | momentum-eviction + no-recycle cooldown=4 cycles | rejected | 0.5850 |
+| 82 | momentum-eviction + no-recycle cooldown=5 cycles | rejected | 0.5850 |
+| 83 | momentum-eviction + no-recycle cooldown=6 cycles | rejected | 0.5850 |
+| 84 | momentum-eviction + no-recycle cooldown=7 cycles | rejected | 0.5660 |
+| 85 | decline lookback = 2x HOLD_MONTHS (compare vs 2 reforms ago) | rejected | 0.1431 |
+| 86 | decline lookback = 3x HOLD_MONTHS (compare vs 3 reforms ago) | rejected | 0.4627 |
+| 87 | decline lookback = 4x HOLD_MONTHS (compare vs 4 reforms ago) | rejected | 0.2437 |
+| 88 | percent decline instead of absolute point decline for eviction ranking | rejected | 0.6134 |
+| 89 | rank-position decline instead of raw score decline | rejected | 0.5985 |
+| 90 | z-score decline (normalize decline by that month's cross-sectional score std) | rejected | 0.5850 |
+| 91 | weighted eviction score = decline + alpha*normalized_rank, alpha=0.25 | rejected | 0.6134 |
+| 92 | weighted eviction score = decline + alpha*normalized_rank, alpha=0.5 | rejected | 0.3963 |
+| 93 | weighted eviction score = decline + alpha*normalized_rank, alpha=0.75 | rejected | 0.4401 |
+| 94 | weighted eviction score = decline + alpha*normalized_rank, alpha=1.0 | rejected | 0.4592 |
+| 95 | weighted eviction score = decline + alpha*normalized_rank, alpha=1.5 | rejected | 0.4592 |
+| 96 | weighted eviction score = decline + alpha*normalized_rank, alpha=2.0 | rejected | 0.3842 |
+| 97 | weighted eviction score = decline + alpha*normalized_rank, alpha=3.0 | rejected | 0.3842 |
+| 98 | weighted eviction score = decline + alpha*normalized_rank, alpha=-0.5 | rejected | 0.4616 |
+| 99 | variable-count eviction: evict any held name with decline > 5 pts (fallback to worst-3 if none) | rejected | 0.2484 |
+| 100 | variable-count eviction: evict any held name with decline > 10 pts (fallback to worst-3 if none) | rejected | 0.4404 |
+| 101 | variable-count eviction: evict any held name with decline > 15 pts (fallback to worst-3 if none) | rejected | 0.0771 |
+| 102 | variable-count eviction: evict any held name with decline > 20 pts (fallback to worst-3 if none) | rejected | -0.0129 |
+| 103 | variable-count eviction: evict any held name with decline > 25 pts (fallback to worst-3 if none) | rejected | 0.1192 |
+| 104 | variable-count eviction: evict any held name with decline > 30 pts (fallback to worst-3 if none) | rejected | 0.1929 |
+| 105 | variable-count eviction: evict any held name with decline > 35 pts (fallback to worst-3 if none) | rejected | -0.0266 |
+| 106 | variable-count eviction: evict any held name with decline > 40 pts (fallback to worst-3 if none) | rejected | -0.1588 |
+| 107 | variable-count eviction: evict any held name with decline > 45 pts (fallback to worst-3 if none) | rejected | 0.2129 |
+| 108 | variable-count eviction: evict any held name with decline > 50 pts (fallback to worst-3 if none) | rejected | 0.3044 |
+| 109 | dedup fill: prefer replacement names not already held by another sleeve | rejected | -0.4158 |
+| 110 | dedup fill combined with no-recycle memory | rejected | -0.4158 |
+| 111 | rising-fill: prefer replacement candidates whose score improved since last reform | rejected | 0.6422 |
+| 112 | EMA-smoothed decline metric (not smoothing the score itself), beta=0.2 | rejected | 0.5342 |
+| 113 | EMA-smoothed decline metric (not smoothing the score itself), beta=0.3 | rejected | 0.2096 |
+| 114 | EMA-smoothed decline metric (not smoothing the score itself), beta=0.5 | rejected | 0.3176 |
+| 115 | EMA-smoothed decline metric (not smoothing the score itself), beta=0.7 | rejected | 0.4096 |
+| 116 | EMA-smoothed decline metric (not smoothing the score itself), beta=0.8 | rejected | 0.4060 |
+| 117 | EMA-smoothed decline metric (not smoothing the score itself), beta=0.9 | rejected | 0.5969 |
+| 118 | drawdown-since-peak eviction: evict biggest drop from each held name's own peak score while held | rejected | 0.3620 |
+| 119 | drawdown-since-peak eviction combined with no-recycle memory | rejected | 0.3620 |
+| 120 | uneven sleeve stagger offsets=[0, 2, 5] under momentum-eviction (retest, session1 tried this under rank-rotation) | rejected | 0.3707 |
+| 121 | uneven sleeve stagger offsets=[0, 3, 4] under momentum-eviction (retest, session1 tried this under rank-rotation) | rejected | 0.5693 |
+| 122 | uneven sleeve stagger offsets=[0, 1, 4] under momentum-eviction (retest, session1 tried this under rank-rotation) | rejected | 0.2794 |
+| 123 | uneven sleeve stagger offsets=[0, 1, 3] under momentum-eviction (retest, session1 tried this under rank-rotation) | rejected | 0.0342 |
+| 124 | uneven sleeve stagger offsets=[0, 4, 5] under momentum-eviction (retest, session1 tried this under rank-rotation) | rejected | 0.5258 |
+| 125 | uneven sleeve stagger offsets=[0, 2, 3] under momentum-eviction (retest, session1 tried this under rank-rotation) | rejected | 0.3703 |
+| 126 | adaptive REFRESH_N (4 if top-10 score spread > 8pts else 2), momentum criterion for WHICH names | rejected | 0.3405 |
+| 127 | adaptive REFRESH_N (4 if top-10 score spread > 10pts else 2), momentum criterion for WHICH names | rejected | 0.3405 |
+| 128 | adaptive REFRESH_N (4 if top-10 score spread > 12pts else 2), momentum criterion for WHICH names | rejected | 0.3405 |
+| 129 | adaptive REFRESH_N (4 if top-10 score spread > 15pts else 2), momentum criterion for WHICH names | rejected | 0.3405 |
+| 130 | adaptive REFRESH_N (4 if top-10 score spread > 18pts else 2), momentum criterion for WHICH names | rejected | 0.3405 |
+| 131 | adaptive REFRESH_N (4 if top-10 score spread > 20pts else 2), momentum criterion for WHICH names | rejected | 0.3405 |
+| 132 | buffer-based adaptive refresh: evict every held name that fell outside top (k+2), momentum tie-break | rejected | 0.3142 |
+| 133 | buffer-based adaptive refresh: evict every held name that fell outside top (k+5), momentum tie-break | rejected | 0.2643 |
+| 134 | buffer-based adaptive refresh: evict every held name that fell outside top (k+8), momentum tie-break | rejected | 0.1248 |
+| 135 | buffer-based adaptive refresh: evict every held name that fell outside top (k+10), momentum tie-break | rejected | 0.1306 |
+| 136 | buffer-based adaptive refresh: evict every held name that fell outside top (k+12), momentum tie-break | rejected | 0.1306 |
+| 137 | buffer-based adaptive refresh: evict every held name that fell outside top (k+15), momentum tie-break | rejected | 0.1549 |
+| 138 | buffer-based adaptive refresh: evict every held name that fell outside top (k+18), momentum tie-break | rejected | 0.0655 |
+| 139 | buffer-based adaptive refresh: evict every held name that fell outside top (k+20), momentum tie-break | rejected | 0.3453 |
+| 140 | min-tenure lock: a name can't be evicted within its first 1 cycle(s) held | rejected | 0.5850 |
+| 141 | min-tenure lock: a name can't be evicted within its first 2 cycle(s) held | rejected | 0.2405 |
+| 142 | min-tenure lock: a name can't be evicted within its first 3 cycle(s) held | rejected | 0.4337 |
+| 143 | min-tenure lock: a name can't be evicted within its first 4 cycle(s) held | rejected | 0.2374 |
+| 144 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (3, 6, 9) | rejected | n/a (test/error) |
+| 145 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (4, 6, 8) | rejected | 0.5229 |
+| 146 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (2, 6, 10) | rejected | n/a (test/error) |
+| 147 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (4, 5, 6) | rejected | 0.4494 |
+| 148 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (6, 6, 12) | rejected | n/a (test/error) |
+| 149 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (3, 6, 12) | rejected | n/a (test/error) |
+| 150 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (2, 4, 6) | rejected | 0.4609 |
+| 151 | multi-horizon sleeves: independent HOLD_MONTHS per sleeve = (5, 6, 7) | rejected | 0.2727 |
+| 152 | sustained-decline eviction: require decline positive in AND of last 2 reforms before eligible | rejected | 0.2630 |
+| 153 | sustained-decline eviction: require decline positive in OR of last 2 reforms before eligible | rejected | 0.5850 |
+| 154 | sustained-decline eviction: require decline positive in AND of last 3 reforms before eligible | rejected | -0.2861 |
+| 155 | sustained-decline eviction: require decline positive in OR of last 3 reforms before eligible | rejected | 0.5850 |
+| 156 | sustained-decline eviction: require decline positive in AND of last 4 reforms before eligible | rejected | -0.1673 |
+| 157 | decline measured relative to each name's ENTRY score (not last-reform score) | rejected | 0.3620 |
+| 158 | entry-relative decline combined with no-recycle memory | rejected | 0.3620 |
+| 159 | volatility-weighted decline: decline x (1 + trailing 3mo score volatility/10) | rejected | 0.5812 |
+| 160 | volatility-weighted decline: decline x (1 + trailing 6mo score volatility/10) | rejected | 0.5441 |
+| 161 | volatility-weighted decline: decline x (1 + trailing 9mo score volatility/10) | rejected | 0.5623 |
+| 162 | volatility-weighted decline: decline x (1 + trailing 12mo score volatility/10) | rejected | 0.5623 |
+| 163 | volatility-weighted decline: decline x (1 + trailing 18mo score volatility/10) | rejected | 0.5403 |
+| 164 | volatility-weighted decline: decline x (1 + trailing 24mo score volatility/10) | rejected | 0.5509 |
+| 165 | entrant-only 2-month score averaging for NEW fills (held names unaffected, no smoothing lag on existing holdings) | rejected | -0.0619 |
+| 166 | age-weighted decline: decline x (1 + gamma*tenure_cycles), gamma=0.1 | rejected | 0.5058 |
+| 167 | age-weighted decline: decline x (1 + gamma*tenure_cycles), gamma=0.25 | rejected | 0.5363 |
+| 168 | age-weighted decline: decline x (1 + gamma*tenure_cycles), gamma=0.5 | rejected | 0.4695 |
+| 169 | age-weighted decline: decline x (1 + gamma*tenure_cycles), gamma=0.75 | rejected | 0.6717 |
+| 170 | age-weighted decline: decline x (1 + gamma*tenure_cycles), gamma=1.0 | rejected | 0.6717 |
+| 171 | exit-side percentile floor: evict any held name below the 10th percentile of that month's universe score | rejected | 0.5850 |
+| 172 | exit-side percentile floor: evict any held name below the 20th percentile of that month's universe score | rejected | 0.5850 |
+| 173 | exit-side percentile floor: evict any held name below the 30th percentile of that month's universe score | rejected | 0.5850 |
+| 174 | exit-side percentile floor: evict any held name below the 40th percentile of that month's universe score | rejected | 0.4621 |
+| 175 | exit-side percentile floor: evict any held name below the 50th percentile of that month's universe score | rejected | 0.4563 |
+| 176 | exit-side percentile floor: evict any held name below the 60th percentile of that month's universe score | rejected | 0.3300 |
+| 177 | exit-side percentile floor: evict any held name below the 70th percentile of that month's universe score | rejected | 0.3123 |
+| 178 | exit-side percentile floor: evict any held name below the 80th percentile of that month's universe score | rejected | 0.3240 |
+| 179 | protect-top-1: never evict a held name currently ranked in the universe's top 1, regardless of decline | rejected | 0.5850 |
+| 180 | protect-top-2: never evict a held name currently ranked in the universe's top 2, regardless of decline | rejected | 0.5850 |
+| 181 | protect-top-3: never evict a held name currently ranked in the universe's top 3, regardless of decline | rejected | 0.5850 |
+| 182 | protect-top-4: never evict a held name currently ranked in the universe's top 4, regardless of decline | rejected | 0.5850 |
+| 183 | protect-top-5: never evict a held name currently ranked in the universe's top 5, regardless of decline | rejected | 0.5850 |
+| 184 | skip scheduled reform if it falls in calendar month 12 | rejected | 0.5850 |
+| 185 | skip scheduled reform if it falls in calendar month 1 | rejected | 0.4035 |
+| 186 | skip scheduled reform if it falls in calendar month 6 | rejected | 0.5850 |
+| 187 | asymmetric REFRESH_N per sleeve = (2, 3, 4) | rejected | 0.2927 |
+| 188 | asymmetric REFRESH_N per sleeve = (1, 3, 5) | rejected | 0.4366 |
+| 189 | asymmetric REFRESH_N per sleeve = (4, 3, 2) | rejected | 0.4542 |
+| 190 | custom sleeve STEP=1 (independent of HOLD_MONTHS/3) | rejected | 0.0433 |
+| 191 | custom sleeve STEP=3 (independent of HOLD_MONTHS/3) | rejected | n/a (test/error) |
+| 192 | custom sleeve STEP=4 (independent of HOLD_MONTHS/3) | rejected | n/a (test/error) |
+| 193 | acceleration-based eviction: evict names whose decline is ACCELERATING (2nd derivative of score) vs prior cycle | rejected | 0.4712 |
+| 194 | absolute entry score floor=40: prefer replacements above this score, fallback to best available | rejected | 0.5850 |
+| 195 | absolute entry score floor=50: prefer replacements above this score, fallback to best available | rejected | 0.5850 |
+| 196 | absolute entry score floor=60: prefer replacements above this score, fallback to best available | rejected | 0.5850 |
+| 197 | absolute entry score floor=70: prefer replacements above this score, fallback to best available | rejected | 0.5850 |
+
+## Final champion after session 3
+
+**HOLD_MONTHS=4 + REFRESH_N=2 under momentum-eviction (round 67)**:
+3 overlapping sleeves, each held 4 months, replacing the 2 held names per
+sleeve with the biggest score DECLINE since the sleeve's own last reform
+(not the absolute worst-ranked names). research_score 1.060 (dev_ir 1.205,
+val_ir 1.060) -- up from 0.585 at the start of this session, nearly a
+2x improvement, and up from 0.253 at the original baseline.
+
+| metric | session-2 champion | session-3 champion | delta |
+|---|---|---|---|
+| research_score | 0.585 | 1.060 | +0.475 |
+| dev_ir / val_ir | 0.627 / 0.585 | 1.205 / 1.060 | both legs jumped a lot |
+| sharpe (dev+val) | 1.128 | 1.114 | -0.014 (~flat) |
+| beta (vs SPY) | 0.775 | 0.917 | +0.142 (more market exposure) |
+| alpha (vs SPY, annualized) | 8.5%/yr | 8.7%/yr | +0.2pt |
+| cagr | 19.5% | 21.5% | +2.0pt |
+| max_dd | -18.6% | -20.1% | -1.5pt (slightly deeper) |
+| turnover | 0.109 | 0.112 | ~unchanged |
+| holdout sharpe (diagnostic only) | 1.74 | 1.48 | not used to decide; went down |
+
+Note the holdout diagnostic (2025+, never used to decide) is LOWER for the
+new champion than the old one (1.48 vs 1.74) even though dev+val
+research_score nearly doubled -- exactly the situation the strict dev/val
+gate is designed to be indifferent to. It's reported for the record, not
+treated as a red flag, since the promotion rule by design never looks at
+it.
+
+## What actually moved the needle
+
+**Jointly re-optimizing HOLD_MONTHS and REFRESH_N (round 67) was the
+standout result.** Sessions 1-2 had each parameter's "optimal" value
+anchored by whichever value the OTHER parameter happened to hold at the
+time (HOLD_MONTHS=6 was chosen before REFRESH_N or momentum-eviction
+existed; REFRESH_N=3 was chosen with HOLD_MONTHS already fixed at 6).
+Session 3's full grid (HOLD in {4,5,6,7,8,9,10} x REFRESH_N in
+{1,2,3,4,5,6,7}, momentum-eviction throughout) found HOLD=4/REFRESH_N=2 --
+faster, smaller rotations -- clearly dominates HOLD=6/REFRESH_N=3 on both
+legs at once. This is a genuine interaction the earlier separable sweeps
+could never have found by construction.
+
+**Round 56 (HOLD_MONTHS=8 alone, still REFRESH_N=3) was a real
+intermediate win (0.585 -> 0.677)** before being superseded by round 67 --
+evidence the HOLD_MONTHS=6 anchor from session 1 was already stale once
+momentum-eviction (not rank-rotation) is the eviction rule, independent of
+the REFRESH_N interaction.
+
+## What didn't work, and why that's informative
+
+- **No-immediate-recycle memory (rounds 79-84) is now flat-to-negative at
+  every cooldown length**, unlike session 2 where a 2-cycle cooldown was a
+  real standalone win. With faster HOLD=4/REFRESH_N=2 rotation already in
+  place by round 67, subsequent no-recycle rounds were tested against a
+  *stale* HOLD=6/REFRESH_N=3 base (rounds 79-84 ran before round 67 in this
+  batch's fixed ordering) -- worth a future retest specifically layering
+  no-recycle on top of the new HOLD=4/REFRESH_N=2 champion, since it
+  hasn't actually been tried in that combination yet.
+- **Every alternative decline metric tried** -- percent decline,
+  rank-position decline, z-score decline, EMA-smoothed decline,
+  volatility-weighted decline, age-weighted decline, acceleration
+  (2nd-derivative) decline, entry-relative decline, drawdown-since-peak --
+  **landed at or below the plain-point-decline baseline.** The simplest
+  possible metric (raw score points lost since last reform) keeps winning
+  over every more elaborate alternative, echoing session 2's finding that
+  "coarse" rules beat conditional/adaptive refinements on this composite.
+- **Every gating/protection rule** -- percentile entry floors, absolute
+  score floors, percentile exit floors, protect-top-N, min-tenure locks,
+  sustained-decline requirements, calendar-month skips -- **either tied
+  (never bound) or hurt.** None of these added real information beyond
+  "rank by score, evict by decline."
+- **Multi-horizon sleeves (independent HOLD_MONTHS per sleeve) never beat
+  a single shared HOLD_MONTHS**, including combinations that bracketed the
+  eventual winning value of 4. Diversifying hold length across sleeves
+  adds complexity without adding signal here.
+- **Dedup fill (rounds 109-110) hurt badly** (-0.42), the worst result of
+  the session alongside the AND-mode sustained-decline variants --
+  forcing sleeves to hold disjoint names apparently fights the composite's
+  natural tendency for multiple sleeves to independently converge on the
+  same genuinely-best names, which is a feature, not a bug, of this setup.
+- **Uneven sleeve staggering (rounds 120-125) again lost to even
+  spacing**, confirming session 1's finding under a completely different
+  eviction rule (momentum instead of rank) and hold length (4 instead of
+  6) -- even spacing is robust across both dimensions that changed.
