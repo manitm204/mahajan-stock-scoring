@@ -123,28 +123,38 @@ def test_zero_turnover_when_weights_unchanged():
 #    month, all 3 sleeves converge onto the same 10 names and weights must
 #    AGGREGATE, not overwrite)
 # --------------------------------------------------------------------------- #
+def _candidate_book_size() -> int:
+    """Book size is a candidate.py design choice (module-level BOOK_SIZE),
+    not something evaluate.py enforces -- context.k is only a suggested
+    default. Falls back to 10 for any candidate that still reads context.k
+    directly instead of declaring its own BOOK_SIZE."""
+    return getattr(candidate_mod, "BOOK_SIZE", 10)
+
+
 def test_sleeve_overlap_aggregates_weight_when_sleeves_share_names():
-    tickers = [f"T{i}" for i in range(10)]
+    k = _candidate_book_size()
+    tickers = [f"T{i}" for i in range(k)]
     dates = _dates(6)
-    # identical ranking every month -> every sleeve always picks the same 10
-    comp = {d: pd.Series(range(10, 0, -1), index=tickers) for d in dates}
-    ctx = Context(rebal_dates=tuple(dates), comp=_freeze_comp(comp), k=10)
+    # identical ranking every month -> every sleeve always picks the same k names
+    comp = {d: pd.Series(range(k, 0, -1), index=tickers) for d in dates}
+    ctx = Context(rebal_dates=tuple(dates), comp=_freeze_comp(comp), k=k)
     targets = candidate_mod.generate_targets(ctx)
     last_date = dates[-1]
     row = targets[targets["date"] == last_date]
-    # fully ramped up (3 sleeves x same 10 names) -> each name's weight is
-    # the SUM across sleeves, i.e. 3 * (1/3/10) = 1/10, and the book is 100%
-    # invested across exactly 10 names, not 30 half-weighted rows.
-    assert len(row) == 10
+    # fully ramped up (3 sleeves x same k names) -> each name's weight is
+    # the SUM across sleeves, i.e. 3 * (1/3/k) = 1/k, and the book is 100%
+    # invested across exactly k names, not 3k fractionally-weighted rows.
+    assert len(row) == k
     assert row["weight"].sum() == pytest.approx(1.0)
-    assert row["weight"].max() == pytest.approx(0.1)
+    assert row["weight"].max() == pytest.approx(1.0 / k)
 
 
 def test_sleeve_ramp_up_leaves_cash_before_third_month():
-    tickers = [f"T{i}" for i in range(10)]
+    k = _candidate_book_size()
+    tickers = [f"T{i}" for i in range(k)]
     dates = _dates(3)
-    comp = {d: pd.Series(range(10, 0, -1), index=tickers) for d in dates}
-    ctx = Context(rebal_dates=tuple(dates), comp=_freeze_comp(comp), k=10)
+    comp = {d: pd.Series(range(k, 0, -1), index=tickers) for d in dates}
+    ctx = Context(rebal_dates=tuple(dates), comp=_freeze_comp(comp), k=k)
     targets = candidate_mod.generate_targets(ctx)
     first_date_total = targets[targets["date"] == dates[0]]["weight"].sum()
     assert first_date_total == pytest.approx(1.0 / 3.0)

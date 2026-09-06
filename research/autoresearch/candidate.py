@@ -13,7 +13,14 @@ Contract
     context.rebal_dates : tuple[str]  monthly PIT signal dates (2020-01 -> 2026-06)
     context.comp         : {date -> pd.Series(ticker -> 0-100 composite score)}
                             already point-in-time correct, read-only
-    context.k            : int, default book size (10)
+    context.k            : int, SUGGESTED default book size (10) -- evaluate.py
+                            does not enforce targets against this value. Book
+                            size is a candidate.py design choice: declare your
+                            own module-level BOOK_SIZE constant and use that
+                            instead of context.k if you want a different book
+                            size (the fixed correctness tests read BOOK_SIZE
+                            back off this module, so they stay valid for
+                            whatever size you pick).
 
 No prices. No returns. No performance results of any kind, for any period
 (dev, val, or the locked 2025+ holdout) -- so there is nothing here to
@@ -49,6 +56,10 @@ def _fill_to_k(preferred, exclude, full_scores, need):
         out += _top_k(remaining, need - len(out))
     return out
 
+BOOK_SIZE = 10  # candidate.py now owns book size; context.k is only a
+                # suggested default (see evaluate.py's Context docstring) --
+                # nothing in evaluate.py enforces targets against context.k,
+                # so this is free to differ from it.
 SLEEVE_COUNT = 3
 HOLD_MONTHS = 4
 STEP = max(HOLD_MONTHS // SLEEVE_COUNT, 1)
@@ -76,7 +87,7 @@ def _momentum_evict(scores, held, prev_scores, k, refresh_n):
 def generate_targets(context):
     dates = list(context.rebal_dates)
     comp = context.comp
-    k = context.k
+    k = BOOK_SIZE
     sleeve_holdings = [[] for _ in range(SLEEVE_COUNT)]
     weight_per_name = (1.0 / SLEEVE_COUNT) / k
     rows = []
