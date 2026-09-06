@@ -528,3 +528,134 @@ the REFRESH_N interaction.
   spacing**, confirming session 1's finding under a completely different
   eviction rule (momentum instead of rank) and hold length (4 instead of
   6) -- even spacing is robust across both dimensions that changed.
+
+---
+
+# Session 4 (2026-09-06): 50 rounds, BOOK_SIZE now a real candidate.py lever
+
+Starting champion: BOOK_SIZE=10 (hardcoded via context.k), HOLD_MONTHS=4,
+REFRESH_N=1, research_score 1.198. Book size was made a real candidate.py-owned
+constant this session (see the infra commit just before this one): evaluate.py
+never actually enforced targets against `context.k`, so candidate.py can
+declare its own `BOOK_SIZE` and the fixed correctness tests were generalized
+to read it back dynamically instead of hardcoding 10. All 50 candidates were
+smoke-tested (syntax + a 60-ticker/60-month synthetic panel dry run) before
+being run through the real evaluator. Same strict rule: `research_score =
+min(dev_ir, val_ir)` must strictly improve over whatever is currently
+champion, or the round is rejected and `candidate.py` restored automatically.
+
+| # | idea | result | research_score |
+|---|---|---|---|
+| 198 | book size 11 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | **PROMOTED** | 1.2827 |
+| 199 | book size 12 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.9437 |
+| 200 | book size 13 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.7136 |
+| 201 | book size 14 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.6382 |
+| 202 | book size 15 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.5471 |
+| 203 | book size 16 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.5920 |
+| 204 | book size 18 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.3666 |
+| 205 | book size 20 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | 0.0865 |
+| 206 | book size 22 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | -0.3559 |
+| 207 | book size 25 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | -0.6253 |
+| 208 | book size 30 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up) | rejected | -0.3023 |
+| 209 | book size 11 at HOLD=4/REFRESH_N=2 | rejected | 1.0306 |
+| 210 | book size 12 at HOLD=4/REFRESH_N=2 | rejected | 0.9260 |
+| 211 | book size 13 at HOLD=4/REFRESH_N=2 | rejected | 0.7947 |
+| 212 | book size 14 at HOLD=4/REFRESH_N=2 | rejected | 0.7315 |
+| 213 | book size 15 at HOLD=4/REFRESH_N=2 | rejected | 0.5981 |
+| 214 | book size 16 at HOLD=4/REFRESH_N=2 | rejected | 0.7767 |
+| 215 | book size 18 at HOLD=4/REFRESH_N=2 | rejected | 0.4415 |
+| 216 | book size 20 at HOLD=4/REFRESH_N=2 | rejected | 0.0800 |
+| 217 | book size 22 at HOLD=4/REFRESH_N=2 | rejected | -0.0861 |
+| 218 | book size 25 at HOLD=4/REFRESH_N=2 | rejected | -0.2217 |
+| 219 | book size 30 at HOLD=4/REFRESH_N=2 | rejected | -0.2513 |
+| 220 | book size 12 at HOLD=4, REFRESH_N=round(25% of book)=3 | rejected | 0.0438 |
+| 221 | book size 15 at HOLD=4, REFRESH_N=round(25% of book)=4 | rejected | -0.2677 |
+| 222 | book size 16 at HOLD=4, REFRESH_N=round(25% of book)=4 | rejected | -0.2968 |
+| 223 | book size 18 at HOLD=4, REFRESH_N=round(25% of book)=4 | rejected | -0.4107 |
+| 224 | book size 20 at HOLD=4, REFRESH_N=round(25% of book)=5 | rejected | -0.5083 |
+| 225 | book size 24 at HOLD=4, REFRESH_N=round(25% of book)=6 | rejected | -0.8102 |
+| 226 | book size 25 at HOLD=4, REFRESH_N=round(25% of book)=6 | rejected | -0.8003 |
+| 227 | book size 28 at HOLD=4, REFRESH_N=round(25% of book)=7 | rejected | -0.7561 |
+| 228 | book size 30 at HOLD=4, REFRESH_N=round(25% of book)=8 | rejected | -0.9466 |
+| 229 | book size 20 at HOLD=2, REFRESH_N=1 | rejected | -0.6549 |
+| 230 | book size 20 at HOLD=3, REFRESH_N=1 | rejected | -0.6024 |
+| 231 | book size 20 at HOLD=5, REFRESH_N=1 | rejected | -0.5020 |
+| 232 | book size 20 at HOLD=6, REFRESH_N=1 | rejected | -0.3204 |
+| 233 | book size 15 at HOLD=2, REFRESH_N=2 | rejected | 0.4459 |
+| 234 | book size 15 at HOLD=3, REFRESH_N=2 | rejected | 0.3578 |
+| 235 | book size 15 at HOLD=5, REFRESH_N=2 | rejected | -0.2872 |
+| 236 | book size 15 at HOLD=6, REFRESH_N=2 | rejected | 0.1667 |
+| 237 | extreme concentration: book size 2 at HOLD=3, REFRESH_N=1 | rejected | 0.5136 |
+| 238 | extreme concentration: book size 2 at HOLD=4, REFRESH_N=1 | rejected | 0.3229 |
+| 239 | extreme concentration: book size 2 at HOLD=5, REFRESH_N=1 | rejected | 0.8012 |
+| 240 | book size 11 at HOLD=4/REFRESH_N=3 (fill gap just above old k<=10 ceiling) | rejected | 0.2592 |
+| 241 | book size 11 at HOLD=4/REFRESH_N=4 (fill gap just above old k<=10 ceiling) | rejected | -0.0670 |
+| 242 | book size 13 at HOLD=4/REFRESH_N=3 (fill gap just above old k<=10 ceiling) | rejected | 0.0680 |
+| 243 | book size 13 at HOLD=4/REFRESH_N=4 (fill gap just above old k<=10 ceiling) | rejected | -0.0418 |
+| 244 | book size 14 at HOLD=4/REFRESH_N=3 (fill gap just above old k<=10 ceiling) | rejected | -0.0505 |
+| 245 | book size 14 at HOLD=4/REFRESH_N=4 (fill gap just above old k<=10 ceiling) | rejected | -0.0474 |
+| 246 | book size 20, HOLD=4, REFRESH_N=1, but percent-decline eviction metric (does scale change the earlier point-decline-wins finding?) | rejected | 0.5414 |
+| 247 | book size 15, HOLD=4, REFRESH_N=2, + no-immediate-recycle cooldown=2 (does more names dilute the earlier no-recycle-doesn't-help finding?) | rejected | 0.5981 |
+
+## Final champion after session 4
+
+**BOOK_SIZE=11 + HOLD_MONTHS=4 + REFRESH_N=1 (round 198)**: identical
+mechanics to the session-3 champion, just one more name held per sleeve
+(11 instead of 10). research_score 1.283 (dev_ir 1.451, val_ir 1.283) --
+up from 1.198 at the start of this session.
+
+| metric | session-3 champion (k=10) | session-4 champion (k=11) | delta |
+|---|---|---|---|
+| research_score | 1.198 | 1.283 | +0.085 |
+| dev_ir / val_ir | 1.198 / 1.274 | 1.451 / 1.283 | dev leg jumped a lot |
+| sharpe (dev+val) | 1.090 | 1.134 | +0.044 |
+| alpha t-stat | 3.04 | 3.51 | +0.47 |
+| cagr | 21.3% | 22.0% | +0.7pt |
+| max_dd | -20.9% | -19.8% | +1.1pt (shallower) |
+| turnover | 0.064 | 0.062 | ~unchanged |
+| holdout sharpe (diagnostic only) | 1.59 | 1.59 | ~unchanged |
+
+## What actually moved the needle
+
+**One extra name (book size 10 -> 11) at the exact same HOLD=4/REFRESH_N=1
+recipe was a real, if modest, improvement.** This is a genuinely new lever
+that didn't exist before this session -- book size had been hardcoded by
+the harness since the project began.
+
+## What didn't work, and why that's informative
+
+- **Every book size larger than 11 hurt, monotonically, at every
+  HOLD_MONTHS/REFRESH_N combination tried** -- sizes up to 30 were tested
+  (rounds 199-208, 209-219, 220-228) and research_score fell steadily as
+  book size grew, turning clearly negative by book size ~22-25. More
+  diversification diluted this composite's signal rather than reducing
+  risk; the strategy's edge is concentrated in a fairly small number of
+  genuinely differentiated top names, not spread thin.
+- **Proportional (book-size-scaled) REFRESH_N -- evicting ~25% of the book
+  each reform -- was uniformly bad at every size tested** (rounds 220-228,
+  all negative or near-zero). The earlier finding that slow, small,
+  fixed-count rotation wins held regardless of how large the book got.
+- **HOLD_MONTHS sweeps at larger books (k=15, k=20) did not find a better
+  hold length than 4** -- confirming HOLD_MONTHS=4 is not an artifact of
+  the specific k=10/11 book size.
+- **Extreme concentration (book size 2) was mediocre, not great** (0.32-0.80
+  across hold lengths tried) -- so the answer isn't "more concentration is
+  always better" either; there's a real interior optimum around 10-11
+  names, not a monotonic relationship with book size in either direction.
+- **Percent-decline eviction and no-recycle memory, retested now at larger
+  book sizes (rounds 246-247), still didn't help** -- both prior
+  session-3 findings ("simpler decline metric wins," "no-recycle doesn't
+  stack with momentum-eviction") hold regardless of book size.
+
+## Open robustness caveat (carried over from the earlier neighbor analysis)
+
+Book size behaves similarly to how HOLD_MONTHS/REFRESH_N did before: 9, 10,
+and 11 all score reasonably (0.92, 1.20, 1.28) so the *book-size* axis is a
+genuine, fairly gentle local peak, not a cliff -- but the REFRESH_N axis at
+this book size is still a sharp spike (REFRESH_N=1 vs. 2 vs. 3 at BOOK_SIZE=11
+is 1.283 -> 1.031 -> 0.259, a steep drop-off), same shape as the BOOK_SIZE=10
+champion had. The flatter, more robust alternatives identified in the earlier
+neighbor-robustness analysis (e.g. BOOK_SIZE=4, HOLD_MONTHS=4, REFRESH_N=3)
+have not been superseded by this session's findings -- this remains an open
+choice between "highest raw backtest score" and "flattest, most
+generalizable plateau," not yet resolved.

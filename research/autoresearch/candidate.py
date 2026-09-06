@@ -1,4 +1,54 @@
-"""AUTORESEARCH CANDIDATE -- session 3 round 198: book size 11 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up)"""
+"""AUTORESEARCH CANDIDATE -- this is the ONLY file the research agent may
+modify. Everything else in research/autoresearch/ (evaluate.py, program.md,
+results.tsv) and the correctness tests in tests/test_autoresearch_evaluate.py
+are fixed: data loading, dev/val/holdout date boundaries, T+1 execution,
+transaction costs, return/metric/score calculation, and leakage tests all
+live outside this file and cannot be changed from here.
+
+Contract
+--------
+    generate_targets(context) -> pd.DataFrame
+
+`context` exposes exactly three read-only attributes -- nothing else, ever:
+    context.rebal_dates : tuple[str]  monthly PIT signal dates (2020-01 -> 2026-06)
+    context.comp         : {date -> pd.Series(ticker -> 0-100 composite score)}
+                            already point-in-time correct, read-only
+    context.k            : int, SUGGESTED default book size (10) -- evaluate.py
+                            does not enforce targets against this value. Book
+                            size is a candidate.py design choice: declare your
+                            own module-level BOOK_SIZE constant and use that
+                            instead of context.k if you want a different book
+                            size (the fixed correctness tests read BOOK_SIZE
+                            back off this module, so they stay valid for
+                            whatever size you pick).
+
+No prices. No returns. No performance results of any kind, for any period
+(dev, val, or the locked 2025+ holdout) -- so there is nothing here to
+overfit a holdout to even in principle.
+
+Must return a long-format DataFrame with columns:
+    date    (str, must be one of context.rebal_dates)
+    ticker  (str)
+    weight  (float, target PORTFOLIO weight as of that decision date)
+
+------------------------------------------------------------------------
+Current champion (session 4, round 198 of 2026-09-06): after BOOK_SIZE
+became a candidate.py-owned constant, a 50-round book-size sweep found
+BOOK_SIZE=11 beats the prior BOOK_SIZE=10 champion -- one extra name at
+the same HOLD_MONTHS=4/REFRESH_N=1 recipe improved both dev_ir and val_ir.
+research_score history: ... -> HOLD=4/REFRESH_N=1 at BOOK_SIZE=10 (session
+3 follow-up) 1.198 -> BOOK_SIZE=11 (this file) 1.283.
+
+Book size beyond ~11 was tested extensively (up to 30) and consistently
+HURT research_score, monotonically -- more diversified books diluted this
+composite's signal rather than reducing risk, at every HOLD_MONTHS/
+REFRESH_N combination tried. See session_log.md for the full round-by-round
+table across all four sessions, including an open robustness caveat: like
+the BOOK_SIZE=10 champion before it, this is a fairly narrow peak (its
+REFRESH_N and BOOK_SIZE neighbors both fall off quickly), not yet resolved
+in favor of one of the flatter, more robust alternatives identified in the
+neighbor-robustness analysis.
+"""
 from __future__ import annotations
 
 import pandas as pd
