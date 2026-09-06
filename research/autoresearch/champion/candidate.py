@@ -1,51 +1,10 @@
-"""AUTORESEARCH CANDIDATE -- this is the ONLY file the research agent may
-modify. Everything else in research/autoresearch/ (evaluate.py, program.md,
-results.tsv) and the correctness tests in tests/test_autoresearch_evaluate.py
-are fixed: data loading, dev/val/holdout date boundaries, T+1 execution,
-transaction costs, return/metric/score calculation, and leakage tests all
-live outside this file and cannot be changed from here.
-
-Contract
---------
-    generate_targets(context) -> pd.DataFrame
-
-`context` exposes exactly three read-only attributes -- nothing else, ever:
-    context.rebal_dates : tuple[str]  monthly PIT signal dates (2020-01 -> 2026-06)
-    context.comp         : {date -> pd.Series(ticker -> 0-100 composite score)}
-                            already point-in-time correct, read-only
-    context.k            : int, SUGGESTED default book size (10) -- evaluate.py
-                            does not enforce targets against this value. Book
-                            size is a candidate.py design choice: declare your
-                            own module-level BOOK_SIZE constant and use that
-                            instead of context.k if you want a different book
-                            size (the fixed correctness tests read BOOK_SIZE
-                            back off this module, so they stay valid for
-                            whatever size you pick).
-
-No prices. No returns. No performance results of any kind, for any period
-(dev, val, or the locked 2025+ holdout) -- so there is nothing here to
-overfit a holdout to even in principle.
-
-Must return a long-format DataFrame with columns:
-    date    (str, must be one of context.rebal_dates)
-    ticker  (str)
-    weight  (float, target PORTFOLIO weight as of that decision date)
-
-------------------------------------------------------------------------
-Current champion (session 3 follow-up, 2026-09-06): a user-requested
-REFRESH_N sweep (1-10) at the session-3 champion's HOLD_MONTHS=4 found
-REFRESH_N=1 beats REFRESH_N=2 -- evicting only the SINGLE worst-declining
-name per sleeve per reform (instead of 2) improves both dev_ir and val_ir.
-research_score history: ... -> HOLD=4/REFRESH_N=2 (session 3, round 67)
-1.060 -> HOLD=4/REFRESH_N=1 (this file) 1.198. This is the slowest possible
-non-zero rotation: each sleeve trades exactly one name every 4 months.
-See session_log.md for the full history across all sessions.
-"""
+"""AUTORESEARCH CANDIDATE -- session 3 round 198: book size 11 at HOLD=4/REFRESH_N=1 (champion's recipe, scaled up)"""
 from __future__ import annotations
 
 import pandas as pd
 
 from research.strategies.engine import _top_k
+
 
 
 def _fill_to_k(preferred, exclude, full_scores, need):
@@ -56,10 +15,7 @@ def _fill_to_k(preferred, exclude, full_scores, need):
         out += _top_k(remaining, need - len(out))
     return out
 
-BOOK_SIZE = 10  # candidate.py now owns book size; context.k is only a
-                # suggested default (see evaluate.py's Context docstring) --
-                # nothing in evaluate.py enforces targets against context.k,
-                # so this is free to differ from it.
+BOOK_SIZE = 11
 SLEEVE_COUNT = 3
 HOLD_MONTHS = 4
 STEP = max(HOLD_MONTHS // SLEEVE_COUNT, 1)
