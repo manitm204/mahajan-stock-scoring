@@ -1,4 +1,4 @@
-"""AUTORESEARCH CANDIDATE -- session 3 round 56: HOLD_MONTHS=8 retest under momentum-eviction"""
+"""AUTORESEARCH CANDIDATE -- session 3 round 67: grid HOLD=4/REFRESH_N=2 under momentum-eviction"""
 from __future__ import annotations
 
 import pandas as pd
@@ -16,9 +16,9 @@ def _fill_to_k(preferred, exclude, full_scores, need):
     return out
 
 SLEEVE_COUNT = 3
-HOLD_MONTHS = 8
+HOLD_MONTHS = 4
 STEP = max(HOLD_MONTHS // SLEEVE_COUNT, 1)
-REFRESH_N = 3
+REFRESH_N = 2
 
 
 def _momentum_evict(scores, held, prev_scores, k, refresh_n):
