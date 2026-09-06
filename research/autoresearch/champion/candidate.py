@@ -25,40 +25,20 @@ Must return a long-format DataFrame with columns:
     weight  (float, target PORTFOLIO weight as of that decision date)
 
 ------------------------------------------------------------------------
-Current champion (session 3, round 67 of 2026-09-06, 146 candidates tried
-this session on top of 49 from sessions 1-2, research_score = min(dev_ir,
-val_ir) vs SPY, strict promotion rule):
-
-  - top 10 names by composite score
-  - THREE overlapping sleeves, each held 4 months (round 67; was 6 months
-    in sessions 1-2 -- session 3 retested the full HOLD_MONTHS sweep under
-    momentum-eviction, since the original sweep in session 1 predated it,
-    and 4 turned out to beat 6 once combined with REFRESH_N=2)
-  - at each reform, replace the 2 held names with the LARGEST score DECLINE
-    since the sleeve's own last reform (4 months ago) -- not just the
-    absolute worst-ranked names this month (round 36, session 2). A name
-    whose score has risen since last review is never evicted purely for
-    being the lowest-ranked of the 10; eviction targets genuine
-    deterioration.
-  - equal weighting within each sleeve (1/3 of NAV / 10 names once ramped)
-  - costs and T+1 execution are handled entirely by evaluate.py
-
-research_score history: baseline 0.253 -> HOLD_MONTHS=6 (session 1, round 3)
-0.302 -> worst-rank partial rotation (round 9) 0.362 -> momentum-eviction
-(session 2, round 36) 0.585 -> HOLD_MONTHS=4 + REFRESH_N=2 under
-momentum-eviction (session 3, round 67) 1.060. 146 other session-3 ideas
-(finer HOLD/REFRESH_N grids, decline-metric variants, no-recycle memory,
-adaptive/buffered refresh counts, multi-horizon sleeves, percentile/entry
-floors, tenure locks, calendar-skip rules, etc.) were all tried and
-rejected -- see session_log.md for the full round-by-round table across
-all three sessions.
+Current champion (session 3 follow-up, 2026-09-06): a user-requested
+REFRESH_N sweep (1-10) at the session-3 champion's HOLD_MONTHS=4 found
+REFRESH_N=1 beats REFRESH_N=2 -- evicting only the SINGLE worst-declining
+name per sleeve per reform (instead of 2) improves both dev_ir and val_ir.
+research_score history: ... -> HOLD=4/REFRESH_N=2 (session 3, round 67)
+1.060 -> HOLD=4/REFRESH_N=1 (this file) 1.198. This is the slowest possible
+non-zero rotation: each sleeve trades exactly one name every 4 months.
+See session_log.md for the full history across all sessions.
 """
 from __future__ import annotations
 
 import pandas as pd
 
 from research.strategies.engine import _top_k
-
 
 
 def _fill_to_k(preferred, exclude, full_scores, need):
@@ -72,7 +52,7 @@ def _fill_to_k(preferred, exclude, full_scores, need):
 SLEEVE_COUNT = 3
 HOLD_MONTHS = 4
 STEP = max(HOLD_MONTHS // SLEEVE_COUNT, 1)
-REFRESH_N = 2
+REFRESH_N = 1
 
 
 def _momentum_evict(scores, held, prev_scores, k, refresh_n):
