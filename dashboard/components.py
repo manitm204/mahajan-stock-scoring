@@ -138,10 +138,11 @@ def sidebar() -> None:
             st.page_link("pages/2_Portfolio.py",    label="📊  Portfolio")
             st.page_link("pages/3_Scoring.py",      label="⚖️  Scoring")
             st.page_link("pages/4_Stock_Detail.py", label="🔎  Stock Detail")
+            st.page_link("pages/5_Strategy_Lab.py",  label="🧪  Strategy Lab")
         except KeyError:
             # AppTest runs a page file standalone, so the multipage registry
             # (url_pathname) isn't populated — links only exist in a real run.
-            st.caption("Stocks · Portfolio · Scoring · Stock Detail")
+            st.caption("Stocks · Portfolio · Scoring · Stock Detail · Strategy Lab")
 
         st.divider()
         st.markdown(

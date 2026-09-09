@@ -412,6 +412,40 @@ class FMPProvider:
                 break
         return out
 
+    def get_beneficial_ownership(self, ticker: str) -> list[dict[str, Any]]:
+        """13D/13G beneficial-ownership filings from /stable/acquisition-of-beneficial-ownership.
+
+        One row per reporting-person filing: `filingDate`/`acceptedDate` (the
+        real disclosure date — filed within 10 days of crossing 5% ownership,
+        no additional PIT lag needed), `nameOfReportingPerson`,
+        `amountBeneficiallyOwned`, `percentOfClass`, `typeOfReportingPerson`.
+        Full history arrives in one call (AAPL back to 1998; no pagination).
+        """
+        data = self._get("acquisition-of-beneficial-ownership", {"symbol": ticker})
+        return data if isinstance(data, list) else []
+
+    def get_congressional_trades(self, ticker: str, chamber: str,
+                                 max_pages: int = 5) -> list[dict[str, Any]]:
+        """Senate/House stock-trade disclosures for one symbol.
+
+        `chamber` is ``"senate"`` or ``"house"`` -> `/stable/senate-trades` or
+        `/stable/house-trades`. Each row carries `transactionDate` (when the
+        trade happened) and `disclosureDate` (when it became public under the
+        STOCK Act, up to 45 days later) — PIT gating must use `disclosureDate`,
+        never `transactionDate`. `amount` is a disclosed dollar range, not an
+        exact figure.
+        """
+        path = f"{chamber}-trades"
+        out: list[dict[str, Any]] = []
+        for page in range(max_pages):
+            data = self._get(path, {"symbol": ticker, "page": page})
+            if not isinstance(data, list) or not data:
+                break
+            out.extend(data)
+            if len(data) < 100:
+                break
+        return out
+
 
 # ---------------------------------------------------------------------------
 # FRED — macro / regime series (requires FRED_API_KEY)
@@ -521,11 +555,18 @@ class ProviderRegistry:
     def earnings(self) -> Any | None:
         return self.resolve("earnings")
 
+    def beneficial_ownership(self) -> Any | None:
+        return self.resolve("beneficial_ownership")
+
+    def congressional_trades(self) -> Any | None:
+        return self.resolve("congressional_trades")
+
     def describe(self) -> dict[str, str]:
         """Resolve every domain once and return a name map (for run summary)."""
         summary = {}
         for domain in ("prices", "fundamentals", "transcripts", "macro",
-                       "filings", "short_interest", "insiders", "earnings"):
+                       "filings", "short_interest", "insiders", "earnings",
+                       "beneficial_ownership", "congressional_trades"):
             if domain == "filings":
                 summary[domain] = "sec"
                 continue

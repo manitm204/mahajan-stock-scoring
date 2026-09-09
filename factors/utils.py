@@ -424,6 +424,41 @@ class DataContext:
             self._cache["insider"] = df[df["ticker"].isin(self.universe)]
         return self._cache["insider"]  # type: ignore[return-value]
 
+    def beneficial_ownership_window(self) -> pd.DataFrame:
+        """13D/13G filings gated by ``filing_date`` (the real disclosure date —
+        filed within 10 days of crossing 5%, so no additional PIT lag is
+        needed on top of it, unlike short interest or 13F).
+
+        ``filing_type`` ('13D'/'13G'/None) is parsed from the filing URL and
+        only populated for filings since ~2019 (see
+        :func:`data.beneficial_ownership._filing_type`); callers isolating
+        real activist stakes (13D) from routine passive crossings (13G) must
+        filter on it and accept the resulting survivorship to recent years.
+        """
+        if "beneficial_ownership" not in self._cache:
+            df = self.db.query_df(
+                "SELECT ticker, filing_date, reporting_person, reporting_person_type, "
+                "filing_type, amount_beneficially_owned, percent_of_class "
+                "FROM beneficial_ownership WHERE filing_date <= ?", (self.as_of,))
+            self._cache["beneficial_ownership"] = (
+                df[df["ticker"].isin(self.universe)] if not df.empty else df)
+        return self._cache["beneficial_ownership"]  # type: ignore[return-value]
+
+    def congressional_trades_window(self, lookback_days: int = 180) -> pd.DataFrame:
+        """Senate/House trades in the trailing window ending ``as_of``, gated by
+        ``disclosure_date`` (the STOCK Act allows up to 45d between a trade and
+        its disclosure, so gating on ``transaction_date`` would be look-ahead)."""
+        if "congressional_trades" not in self._cache:
+            start = (pd.Timestamp(self.as_of) - pd.Timedelta(days=lookback_days)).date().isoformat()
+            df = self.db.query_df(
+                "SELECT ticker, chamber, member_id, transaction_type, transaction_date, "
+                "disclosure_date, amount_range FROM congressional_trades "
+                "WHERE disclosure_date <= ? AND disclosure_date >= ?",
+                (self.as_of, start))
+            self._cache["congressional_trades"] = (
+                df[df["ticker"].isin(self.universe)] if not df.empty else df)
+        return self._cache["congressional_trades"]  # type: ignore[return-value]
+
     # -- regime / crowding inputs ------------------------------------------
     def vix(self) -> float | None:
         row = self.db.query_one(

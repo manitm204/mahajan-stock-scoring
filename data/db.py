@@ -219,6 +219,60 @@ CREATE TABLE IF NOT EXISTS insider_flags (
 );
 CREATE INDEX IF NOT EXISTS idx_iflag_ticker ON insider_flags(ticker);
 
+-- Beneficial ownership (13D/13G activist stakes) ----------------------------
+CREATE TABLE IF NOT EXISTS beneficial_ownership (
+    id                       INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker                   TEXT,
+    cik                      TEXT,
+    filing_date              TEXT,
+    accepted_date            TEXT,
+    cusip                    TEXT,
+    reporting_person         TEXT,
+    citizenship              TEXT,
+    sole_voting_power        REAL,
+    shared_voting_power      REAL,
+    sole_dispositive_power   REAL,
+    shared_dispositive_power REAL,
+    amount_beneficially_owned REAL,
+    percent_of_class         REAL,
+    reporting_person_type    TEXT,
+    filing_type              TEXT,   -- '13D'/'13G' parsed from the filing URL
+                                      -- (only detectable post ~2019 XBRL-viewer
+                                      -- filings; NULL for older filings)
+    url                      TEXT,
+    source                   TEXT,
+    fetched_at               TEXT,
+    dedup_key                TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_benown_ticker ON beneficial_ownership(ticker);
+CREATE INDEX IF NOT EXISTS idx_benown_date   ON beneficial_ownership(filing_date);
+
+-- Congressional trading (STOCK Act disclosures) -----------------------------
+CREATE TABLE IF NOT EXISTS congressional_trades (
+    id                    INTEGER PRIMARY KEY AUTOINCREMENT,
+    ticker                TEXT,
+    chamber               TEXT,           -- 'senate' or 'house'
+    member_id             TEXT,
+    first_name            TEXT,
+    last_name             TEXT,
+    office                TEXT,
+    district              TEXT,
+    owner                 TEXT,
+    asset_description     TEXT,
+    asset_type            TEXT,
+    transaction_type      TEXT,
+    transaction_date      TEXT,
+    disclosure_date       TEXT,           -- PIT gate: public availability, not transaction_date
+    amount_range          TEXT,
+    capital_gains_over_200 INTEGER,
+    link                  TEXT,
+    source                TEXT,
+    fetched_at            TEXT,
+    dedup_key             TEXT UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_congress_ticker ON congressional_trades(ticker);
+CREATE INDEX IF NOT EXISTS idx_congress_date   ON congressional_trades(disclosure_date);
+
 -- Institutional holdings (13F) ---------------------------------------------
 CREATE TABLE IF NOT EXISTS institutional_holdings (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,

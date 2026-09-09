@@ -462,6 +462,14 @@ from .library_flow import (  # noqa: E402
     build_revisions,
     build_short,
 )
+# `activist` (congressional trading + 13D beneficial ownership) was tested
+# 2026-09-07/08 and rejected: net-negative standalone IC/IR over 2020-2026,
+# and folding its subs into `institutional` degrades that parent's realized
+# IC/IR despite ranking well on the selector's own in-sample metric (see
+# output/activist_eqeff_study/). Builder kept in library_activist.py — not
+# registered here so it no longer enters any battery/selection run. The
+# ingestion pipeline (data/beneficial_ownership.py, data/congressional_trades.py)
+# stays in place in case data quality/coverage improves enough to re-test.
 
 CANDIDATE_BUILDERS: dict[str, ParentBuilder] = {
     "momentum": build_momentum,

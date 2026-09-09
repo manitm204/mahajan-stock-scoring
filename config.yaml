@@ -131,6 +131,10 @@ providers:
   # FMP's /stable/earnings serves ~25y of announcement dates with frozen
   # report-time EPS/revenue estimates; yfinance only offers ~24 rows.
   earnings: ["fmp", "yfinance"]
+  # 13D/13G activist-stake filings and Senate/House STOCK Act disclosures.
+  # FMP-only (SEC EDGAR full-text search could be a fallback later; not built).
+  beneficial_ownership: ["fmp"]
+  congressional_trades: ["fmp"]
 
 # ===========================================================================
 # Layer 2 - Factor Scoring Engine
