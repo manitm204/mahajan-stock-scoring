@@ -34,9 +34,8 @@ from scripts.ablation_monte_carlo_random_book import (               # noqa: E40
     SLEEVE_COUNT, _agg, _eta_squared, _random_targets, _sim_metrics,
 )
 from research.autoresearch.evaluate import (                         # noqa: E402
-    compute_portfolio_returns, targets_to_weight_matrix,
+    bench_returns, compute_portfolio_returns, targets_to_weight_matrix,
 )
-from scripts.run_strategy_sweep import bench_returns                 # noqa: E402
 
 OUT = REPO / "output" / "ablation_monte_carlo_fine_grid" / "results.json"
 

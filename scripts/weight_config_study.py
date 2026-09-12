@@ -63,7 +63,7 @@ from research.analyst_deep_dive.common import (
 )
 from scripts.crowding_diagnostics import parent_score, normalize
 
-PANEL_PKL = REPO / "cache" / "subfactor_expansion" / "cand_panel_2015-06-30_2026-06-30_monthly_v2.pkl"
+PANEL_PKL = REPO / "cache" / "subfactor_expansion" / "cand_panel_2015-06-30_2026-09-04_monthly_v2.pkl"
 OUT = REPO / "output" / "crowding" / "weight_config_study"
 PARENTS = list(SELECTED_SUBS)
 CAP = 0.25

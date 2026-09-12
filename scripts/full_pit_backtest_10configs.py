@@ -61,15 +61,14 @@ from research.subfactor_expansion.panel import load_cached_panel
 from research.analyst_deep_dive.common import load_price_matrix, panel_forward_returns, spearman_ic
 from scripts.crowding_diagnostics import parent_score, normalize
 from scripts.incremental_weight_study import PANEL_PKL, water_fill, combined_scores, CAP
-from scripts.full_pit_backtest_eqeff import cap_trim, WINDOW_YEARS, APPLY_MONTHS, OOS_END, H_MONTHS
+from scripts.full_pit_backtest_eqeff import cap_trim, WINDOW_YEARS, APPLY_MONTHS, H_MONTHS
 from scripts.weight_config_study import cap_and_floor, eff_exposure_metric, FLOOR_EFF, FLOOR_W
 from scripts.factor_scorecard import scorecard
 
 OUT = REPO / "output" / "crowding" / "weight_config_study"
 OUT.mkdir(parents=True, exist_ok=True)
 
-DERIV_POINTS = [f"{y}-{m:02d}-01" for y in range(2020, 2027) for m in (1, 7)
-                if not (y == 2026 and m == 7)]
+DERIV_POINTS = [f"{y}-{m:02d}-01" for y in range(2020, 2027) for m in (1, 7)]
 
 BASELINES = ("A", "E", "EQ", "EQEFF")
 NEW_10 = ("D0", "D25", "D75", "D0_WINSOR", "IREFF",
@@ -174,9 +173,10 @@ def derive():
     db = get_db()
     panel = load_cached_panel(PANEL_PKL)
     all_dates = panel.rebal_dates
+    oos_end = all_dates[-1]     # cap apply_dates at whatever data the panel actually has
     print(f"panel {len(all_dates)} dates {all_dates[0]}..{all_dates[-1]}")
 
-    matrix_full = load_price_matrix(start="2015-01-01", end="2026-07-31")
+    matrix_full = load_price_matrix(start="2015-01-01", end="2026-09-04")
     fwd = panel_forward_returns(matrix_full, all_dates)
     sectors = dl.global_sectors(db)
 
@@ -187,7 +187,7 @@ def derive():
         w0 = (t_ts - pd.DateOffset(years=WINDOW_YEARS)).strftime("%Y-%m-%d")
         window = [d for d in all_dates if w0 <= d < t]
         apply_end = (t_ts + pd.DateOffset(months=APPLY_MONTHS)).strftime("%Y-%m-%d")
-        apply_dates = [d for d in all_dates if t <= d < apply_end and d <= OOS_END]
+        apply_dates = [d for d in all_dates if t <= d < apply_end and d <= oos_end]
         if not apply_dates:
             continue
 

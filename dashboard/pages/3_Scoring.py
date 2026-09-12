@@ -149,3 +149,143 @@ st.caption("Sub weights renormalize within each parent at scoring time "
            "(missing subs fall to neutral 50). IC/IR/coverage come from the "
            "latest research-battery validation run "
            "(output/subfactor_expansion/summary_3M.csv), not live returns.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Rolling IC by parent
+# ---------------------------------------------------------------------------
+st.markdown("### Rolling 5-year IC by parent")
+
+ic_hist = ddata.load_parent_ic_history(horizon="3M")
+if ic_hist.empty:
+    st.caption("No IC history yet — run `python run_factor_research.py` first.")
+else:
+    ROLL_WINDOW = 12  # trailing rebalances (~1yr of monthly points) to smooth
+    cutoff = ic_hist.index.max() - pd.DateOffset(years=5)
+    windowed = ic_hist[ic_hist.index >= cutoff]
+    rolling = windowed.rolling(ROLL_WINDOW, min_periods=max(3, ROLL_WINDOW // 2)).mean()
+
+    # dataviz-skill validated 8-slot categorical palette, fixed hue order
+    PALETTE = ["#2a78d6", "#008300", "#e87ba4", "#eda100",
+               "#1baf7a", "#eb6834", "#4a3aa7", "#e34948"]
+
+    ic_fig = go.Figure()
+    for i, parent in enumerate(rolling.columns):
+        ic_fig.add_scatter(x=rolling.index, y=rolling[parent], mode="lines",
+                           name=parent, line=dict(color=PALETTE[i % len(PALETTE)], width=2))
+    ic_fig.add_hline(y=0, line_dash="dash", line_color="#94a3b8")
+    ic_fig.update_layout(
+        height=420, margin=dict(l=10, r=10, t=10, b=10),
+        yaxis_title=f"rolling {ROLL_WINDOW}-period mean IC (3M fwd return)",
+        legend=dict(orientation="h", y=1.12),
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(gridcolor="rgba(148, 163, 184, 0.15)"))
+    st.plotly_chart(ic_fig, use_container_width=True)
+
+    latest = rolling.iloc[-1].dropna().sort_values(ascending=False)
+    full_mean = windowed[latest.index].mean()
+    ic_table = pd.DataFrame({
+        "Latest rolling IC": latest,
+        "Full-window mean IC": full_mean,
+    })
+    st.dataframe(
+        ic_table.style.format("{:+.4f}"),
+        use_container_width=True, height=42 + 35 * len(ic_table))
+
+    st.markdown("#### Current 5-year IC by parent")
+    bar_order = full_mean.sort_values().index  # ascending so best is at top, horizontal
+    bar_vals = full_mean.reindex(bar_order)
+    bar_colors = ["#e34948" if v < 0 else "#2a78d6" for v in bar_vals]
+    bar_fig = go.Figure(go.Bar(
+        x=bar_vals, y=list(bar_order), orientation="h",
+        marker_color=bar_colors,
+        text=[f"{v:+.3f}" for v in bar_vals], textposition="outside"))
+    bar_fig.add_vline(x=0, line_color="#94a3b8")
+    bar_fig.update_layout(
+        height=80 + 34 * len(bar_vals), margin=dict(l=10, r=40, t=10, b=10),
+        xaxis_title="full-window mean IC (3M fwd return)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        xaxis=dict(gridcolor="rgba(148, 163, 184, 0.15)"), showlegend=False)
+    st.plotly_chart(bar_fig, use_container_width=True)
+    st.caption("A pie chart isn't shown here — IC is signed (some parents are "
+               "currently negative, e.g. quality) and isn't a share of a fixed "
+               "total, so slices would misrepresent rather than clarify. Blue = "
+               "positive full-window mean IC, red = negative.")
+
+    span = f"{rolling.index.min():%Y-%m} to {rolling.index.max():%Y-%m}"
+    st.caption(
+        f"Trailing {ROLL_WINDOW}-rebalance (~1yr) rolling mean of each parent's "
+        f"point-in-time Spearman IC vs 3-month forward return, monthly "
+        f"rebalances, {span}. Labeled '5-year' as the target window, but the "
+        f"earliest reliable point-in-time parent scores only go back to "
+        f"mid-2022 (see adj_close contamination fix), so history here is "
+        f"capped at what's actually available (~3.75 years) rather than a "
+        f"true 5y span. Source: output/factor_research/ic_monthly.csv "
+        f"(`python run_factor_research.py` to refresh) — a research artifact, "
+        f"not live production scores, so it can lag the current date.")
+
+st.divider()
+
+# ---------------------------------------------------------------------------
+# Decile-spread validation (research/loop_research/decile_spread.py,
+# 2026-09-09) -- does the composite score actually rank the universe, or is
+# a high score no better than a low one?
+# ---------------------------------------------------------------------------
+st.markdown("### Does the score actually work? Decile spread")
+st.caption("Full universe ranked by composite score each date into 10 "
+          "equal-sized rank deciles (not raw score-value bins -- the score "
+          "is a per-sector percentile with a large tied mass at 100, so an "
+          "equal-COUNT split is the fair way to test this). A random "
+          "10-stock book is drawn from each decile (same staggered-sleeve "
+          "mechanics as the Monte Carlo page: 4 sleeves, 4-month hold, full "
+          "turnover), 500 independent draws per decile. If the score is "
+          "doing real work, decile 1 (highest scores) should clearly beat "
+          "decile 10 (lowest). Research artifact "
+          "(research/loop_research/decile_spread.py) -- not wired into the "
+          "live production pipeline.")
+
+decile_path = Path(__file__).resolve().parents[2] / "output" / "loop_research" / "decile_spread.json"
+if decile_path.exists():
+    import json as _json
+    with decile_path.open() as fh:
+        decile_data = _json.load(fh)
+    deciles = sorted(decile_data, key=int)
+    sharpe_vals = [decile_data[k]["sharpe"] for k in deciles]
+    cagr_vals = [decile_data[k]["cagr"] for k in deciles]
+    alpha_vals = [decile_data[k]["alpha"] for k in deciles]
+    pct_beat_vals = [decile_data[k]["pct_sims_beating_spy"] for k in deciles]
+
+    decile_fig = go.Figure()
+    decile_fig.add_bar(x=deciles, y=sharpe_vals, name="Sharpe (median of 500 sims)",
+                       marker_color="#2563eb")
+    decile_fig.update_layout(
+        height=340, margin=dict(l=10, r=10, t=10, b=10),
+        xaxis_title="decile (1 = highest composite score, 10 = lowest)",
+        yaxis_title="Sharpe (median across 500 random-draw sims)",
+        plot_bgcolor="rgba(0,0,0,0)",
+        yaxis=dict(gridcolor="rgba(148, 163, 184, 0.15)"))
+    st.plotly_chart(decile_fig, use_container_width=True)
+
+    decile_table = pd.DataFrame({
+        "Decile": [f"{k} (highest)" if k == "1" else f"{k} (lowest)" if k == "10" else k
+                  for k in deciles],
+        "CAGR": cagr_vals, "Sharpe": sharpe_vals, "Alpha (vs SPY, ann.)": alpha_vals,
+        "% sims beating SPY": pct_beat_vals,
+    }).set_index("Decile")
+    st.dataframe(
+        decile_table.style.format({
+            "CAGR": "{:+.1%}", "Sharpe": "{:.3f}",
+            "Alpha (vs SPY, ann.)": "{:+.1%}", "% sims beating SPY": "{:.0%}",
+        }),
+        use_container_width=True, height=42 + 35 * len(decile_table))
+    st.caption("Read: deciles 1-2 (top 20%) clearly separate from the rest "
+              "(positive alpha, beats SPY on 82-93% of sims); decile 10 "
+              "(bottom 10%) is clearly worst on every metric. Deciles 3-9 "
+              "are compressed and non-monotonic -- the score discriminates "
+              "the extremes well but doesn't finely rank the middle of the "
+              "universe. See research/loop_research/session_log.md for the "
+              "full writeup.")
+else:
+    st.caption("No decile-spread results yet — run "
+              "`python -m research.loop_research.decile_spread` first.")

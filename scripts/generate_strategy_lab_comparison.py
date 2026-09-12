@@ -41,6 +41,7 @@ sys.path.insert(0, str(REPO))
 
 from backtesting.data_loader import SPY, QQQ                       # noqa: E402
 from research.autoresearch.evaluate import (                        # noqa: E402
+    bench_returns as bench_returns_start_labeled,
     compute_portfolio_returns, targets_to_weight_matrix,
 )
 from research.strategies.engine import _top_k, load_data, simulate_managed_book  # noqa: E402
@@ -133,8 +134,18 @@ def main() -> None:
     print("loading composite scores + price matrix ...", flush=True)
     data = load_data()
     rebal = data.rebal_dates
+    # pr_v3 (below) comes from monthly_returns() -- end-labeled (label = period's
+    # END date, plain pct_change of a continuous NAV) -- must be paired with this
+    # end-labeled spy/qqq.
     spy = bench_returns(data.matrix, SPY, rebal)
     qqq = bench_returns(data.matrix, QQQ, rebal)
+    # pr_book4 (below) comes from compute_portfolio_returns() -- start-labeled
+    # (label = period's START date, per that function's own docstring) -- pairing
+    # it with the end-labeled spy/qqq above silently offsets every period by one
+    # month (the bug scripts/sleeve_beta_robustness.py diagnosed). Use the
+    # matching start-labeled series here instead.
+    spy_start = bench_returns_start_labeled(data.matrix, SPY, rebal)
+    qqq_start = bench_returns_start_labeled(data.matrix, QQQ, rebal)
 
     print("simulating v3_loopeng_cap9_minhold1wk_quartile ...", flush=True)
     cfg = StrategyConfig(k=10, trail_pct=0.1, cap_months=9,
@@ -153,7 +164,7 @@ def main() -> None:
     print("computing metrics + equity curves ...", flush=True)
     metrics = {
         "v3_loopeng_cap9_minhold1wk_quartile": _metrics(pr_v3, spy, qqq),
-        "21_loopeng_book4_hold4_evict3": _metrics(pr_book4, spy, qqq),
+        "21_loopeng_book4_hold4_evict3": _metrics(pr_book4, spy_start, qqq_start),
         "SPY": _metrics(spy, spy, qqq),
         "QQQ": _metrics(qqq, spy, qqq),
     }

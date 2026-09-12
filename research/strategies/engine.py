@@ -48,7 +48,7 @@ import pandas as pd
 
 REPO = Path(__file__).resolve().parents[2]
 COMP_PKL = REPO / "output" / "crowding" / "weight_config_study" / "comp_10configs.pkl"
-PANEL_PKL = REPO / "cache" / "subfactor_expansion" / "cand_panel_2015-06-30_2026-06-30_monthly_v2.pkl"
+PANEL_PKL = REPO / "cache" / "subfactor_expansion" / "cand_panel_2015-06-30_2026-09-04_monthly_v2.pkl"
 METHOD = "EQEFF"
 COST_BPS = 10.0
 K_DEFAULT = 10
@@ -83,7 +83,7 @@ def load_data() -> StratData:
 
     db = get_db()
     matrix = realize_delistings(
-        dl.load_price_matrix(db, universe, "2019-11-01", "2026-07-31"))
+        dl.load_price_matrix(db, universe, "2019-11-01", "2026-09-04"))
     trading_days = [d for d in matrix.index if rebal_dates[0] <= d <= rebal_dates[-1]]
     sector = dl.global_sectors(db)
 

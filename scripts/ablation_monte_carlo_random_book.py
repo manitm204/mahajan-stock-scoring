@@ -45,11 +45,10 @@ sys.path.insert(0, str(REPO))
 from backtesting.data_loader import SPY, QQQ                        # noqa: E402
 from research.ablation.engine import alpha_tstat                     # noqa: E402
 from research.autoresearch.evaluate import (                         # noqa: E402
-    compute_portfolio_returns, targets_to_weight_matrix,
+    bench_returns, compute_portfolio_returns, targets_to_weight_matrix,
 )
 from research.strategies.engine import load_data                     # noqa: E402
 from research.walkforward.portfolio import performance_metrics       # noqa: E402
-from scripts.run_strategy_sweep import bench_returns                 # noqa: E402
 
 OUT = REPO / "output" / "ablation_monte_carlo_random_book" / "results.json"
 

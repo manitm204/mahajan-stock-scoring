@@ -30,6 +30,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 TOP_PCT = 0.25         # ratified book construction
 SUMMARY_CSV = ROOT / "output" / "subfactor_expansion" / "summary_3M.csv"
+IC_MONTHLY_CSV = ROOT / "output" / "factor_research" / "ic_monthly.csv"
 
 
 # ---------------------------------------------------------------------------
@@ -375,3 +376,25 @@ def load_subfactor_stats() -> pd.DataFrame:
     keep = ["candidate", "parent", "coverage", "mean_ic_3m6m",
             "information_ratio", "hit_rate", "monotonicity"]
     return df[[c for c in keep if c in df.columns]]
+
+
+@st.cache_data(ttl=DEFAULT_TTL, show_spinner=False)
+def load_parent_ic_history(horizon: str = "3M") -> pd.DataFrame:
+    """Per-rebalance point-in-time Spearman IC of each parent factor's raw
+    score vs its ``horizon`` forward return, pivoted to date x parent.
+
+    Source: output/factor_research/ic_monthly.csv, written by the research
+    walk-forward battery (python run_factor_research.py) — not live
+    production scores, and refreshed on demand rather than every run.
+    """
+    if not IC_MONTHLY_CSV.exists():
+        return pd.DataFrame()
+    df = pd.read_csv(IC_MONTHLY_CSV)
+    df = df[(df["horizon"] == horizon) & (df["signal"].isin(dcand.PARENT_FACTORS))]
+    if df.empty:
+        return pd.DataFrame()
+    piv = df.pivot_table(index="date", columns="signal", values="ic", aggfunc="first")
+    piv.index = pd.to_datetime(piv.index)
+    piv = piv.sort_index()
+    order = [f for f in dcand.PARENT_FACTORS if f in piv.columns]
+    return piv[order]

@@ -1,20 +1,22 @@
-"""Monte Carlo test of the book4/hold4/evict3 structure (see
-scripts/generate_strategy_lab_comparison.py's "21_loopeng_book4_hold4_evict3"
-replay: 3 staggered 4-name sleeves, 4-month holds, 3 evictions per review --
-the neighbor the user identified as best in the book-size robustness sweep)
-with the SELECTION step replaced by uniform random draws from that date's
-composite_score == 100 pool (~11 tickers/date -- see
-research/autoresearch/candidate.py's docstring on BOOK_SIZE=11 being a
-narrow, tied-at-the-max peak).
+"""Monte Carlo test of the staggered-sleeve book structure (3 sleeves,
+book size / hold months / refresh count all configurable via CLI -- default
+matches "21_loopeng_book4_hold4_evict3" from
+scripts/generate_strategy_lab_comparison.py) with the SELECTION step
+replaced by uniform random draws from that date's composite_score == 100
+pool (~11 tickers/date -- see research/autoresearch/candidate.py's
+docstring on BOOK_SIZE=11 being a narrow, tied-at-the-max peak).
 
 Question this answers: if every name at the top of the composite is tied at
-score 100, does the deterministic "worst-momentum-decline eviction" rule
-actually add value over picking randomly among the tied names? Runs N
-independent random replays and plots them as a spaghetti chart against a
-highlighted median path and SPY/QQQ.
+score 100, does a deterministic eviction rule actually add value over
+picking randomly among the tied names, for a given (N, hold, refresh)
+config? Runs N independent random replays and plots them as a spaghetti
+chart against a highlighted median path and SPY/QQQ, plus a stats table
+(CAGR, Sharpe, Sortino, max drawdown, beta) for the portfolio (averaged
+across sims), SPY, and QQQ.
 
-Usage: python scripts/monte_carlo_random_book.py [--sims 200] [--seed 0]
-Writes: output/monte_carlo_random_book/results.json
+Usage: python scripts/monte_carlo_random_book.py [--n 4] [--hold 4]
+       [--refresh 3] [--sims 200] [--seed 0] [--out path.json]
+Writes: output/monte_carlo_random_book/results.json (or --out)
 """
 from __future__ import annotations
 
@@ -32,18 +34,12 @@ sys.path.insert(0, str(REPO))
 
 from backtesting.data_loader import SPY, QQQ                        # noqa: E402
 from research.autoresearch.evaluate import (                         # noqa: E402
-    compute_portfolio_returns, targets_to_weight_matrix,
+    bench_returns, compute_portfolio_returns, targets_to_weight_matrix,
 )
 from research.strategies.engine import load_data                     # noqa: E402
-from scripts.run_strategy_sweep import bench_returns                 # noqa: E402
+from research.walkforward.portfolio import performance_metrics       # noqa: E402
 
 OUT = REPO / "output" / "monte_carlo_random_book" / "results.json"
-
-BOOK_SIZE = 4
-HOLD_MONTHS = 4
-SLEEVE_COUNT = 3
-REFRESH_N = 3
-STEP = max(HOLD_MONTHS // SLEEVE_COUNT, 1)
 
 
 def _random_book(comp_date_scores: pd.Series, held: list, k: int,
@@ -76,18 +72,21 @@ def _random_book(comp_date_scores: pd.Series, held: list, k: int,
     return keep + fill
 
 
-def _random_targets(comp: dict, dates: list, rng: random.Random) -> pd.DataFrame:
-    sleeve_holdings = [[] for _ in range(SLEEVE_COUNT)]
-    weight_per_name = (1.0 / SLEEVE_COUNT) / BOOK_SIZE
+def _random_targets(comp: dict, dates: list, rng: random.Random,
+                    book_size: int, hold_months: int, refresh_n: int,
+                    sleeve_count: int) -> pd.DataFrame:
+    step = max(hold_months // sleeve_count, 1)
+    sleeve_holdings = [[] for _ in range(sleeve_count)]
+    weight_per_name = (1.0 / sleeve_count) / book_size
     rows = []
     for i, d in enumerate(dates):
-        for j in range(SLEEVE_COUNT):
-            offset = j * STEP
-            if i >= offset and (i - offset) % HOLD_MONTHS == 0:
+        for j in range(sleeve_count):
+            offset = j * step
+            if i >= offset and (i - offset) % hold_months == 0:
                 scores = comp.get(d)
                 if scores is not None:
                     sleeve_holdings[j] = _random_book(
-                        scores, sleeve_holdings[j], BOOK_SIZE, REFRESH_N, rng)
+                        scores, sleeve_holdings[j], book_size, refresh_n, rng)
         agg = {}
         for holdings in sleeve_holdings:
             for t in holdings:
@@ -97,11 +96,24 @@ def _random_targets(comp: dict, dates: list, rng: random.Random) -> pd.DataFrame
     return pd.DataFrame(rows, columns=["date", "ticker", "weight"])
 
 
+def _stats(pr: pd.Series, spy: pd.Series) -> dict:
+    m = performance_metrics(pr, hold_months=1, benchmarks={"SPY": spy})
+    return {"cagr": m["cagr"], "sharpe": m["sharpe"], "sortino": m["sortino"],
+            "max_dd": m["max_drawdown"], "beta": m.get("spy_beta"),
+            "alpha": m.get("spy_alpha")}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
+    ap.add_argument("--n", type=int, default=4, help="book size per sleeve")
+    ap.add_argument("--hold", type=int, default=4, help="hold months per sleeve review")
+    ap.add_argument("--refresh", type=int, default=3, help="names evicted+refilled per review")
+    ap.add_argument("--sleeves", type=int, default=3, help="number of staggered sleeves")
     ap.add_argument("--sims", type=int, default=200)
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--out", type=str, default=None)
     args = ap.parse_args()
+    book_size, hold_months, refresh_n = args.n, args.hold, args.refresh
 
     print("loading composite scores + price matrix ...", flush=True)
     data = load_data()
@@ -111,12 +123,17 @@ def main() -> None:
 
     all_dates = rebal[:-1]  # compute_portfolio_returns drops the final open period
     sim_curves = np.zeros((args.sims, len(all_dates)))
+    sim_stats = {"cagr": [], "sharpe": [], "sortino": [], "max_dd": [], "beta": [], "alpha": []}
 
     for s in range(args.sims):
         rng = random.Random(args.seed + s)
-        targets = _random_targets(data.comp, rebal, rng)
+        targets = _random_targets(data.comp, rebal, rng, book_size, hold_months, refresh_n,
+                                  args.sleeves)
         weights = targets_to_weight_matrix(targets, rebal)
         pr, _turnover = compute_portfolio_returns(weights, data.matrix, rebal)
+        st = _stats(pr, spy)
+        for k, v in st.items():
+            sim_stats[k].append(v)
         pr = pr.reindex(all_dates).fillna(0.0)
         sim_curves[s] = (1.0 + pr).cumprod().values
         if (s + 1) % 20 == 0:
@@ -126,8 +143,14 @@ def main() -> None:
     p10 = np.percentile(sim_curves, 10, axis=0)
     p90 = np.percentile(sim_curves, 90, axis=0)
 
-    spy_equity = (1.0 + spy.reindex(all_dates).fillna(0.0)).cumprod().values
-    qqq_equity = (1.0 + qqq.reindex(all_dates).fillna(0.0)).cumprod().values
+    spy_r = spy.reindex(all_dates).fillna(0.0)
+    qqq_r = qqq.reindex(all_dates).fillna(0.0)
+    spy_equity = (1.0 + spy_r).cumprod().values
+    qqq_equity = (1.0 + qqq_r).cumprod().values
+
+    portfolio_stats = {k: float(np.mean(v)) for k, v in sim_stats.items()}
+    spy_stats = _stats(spy_r, spy_r)      # beta vs itself = 1.0 by construction
+    qqq_stats = _stats(qqq_r, spy_r)      # beta vs SPY
 
     final_returns = sim_curves[:, -1] - 1.0
     summary = {
@@ -141,11 +164,16 @@ def main() -> None:
         "pct_sims_beating_qqq": float((final_returns > (qqq_equity[-1] - 1.0)).mean()),
     }
     print(json.dumps(summary, indent=2))
+    print("\n=== stats (mean across sims for portfolio) ===")
+    for name, st in [("Portfolio", portfolio_stats), ("SPY", spy_stats), ("QQQ", qqq_stats)]:
+        print(f"  {name:<10} cagr={st['cagr']:.4f}  sharpe={st['sharpe']:.3f}  "
+             f"sortino={st['sortino']:.3f}  max_dd={st['max_dd']:.4f}  beta={st['beta']:.3f}  "
+             f"alpha={st['alpha']:.4f}")
 
     out = {
         "generated_at": pd.Timestamp.utcnow().isoformat(),
-        "params": {"book_size": BOOK_SIZE, "hold_months": HOLD_MONTHS,
-                   "sleeve_count": SLEEVE_COUNT, "refresh_n": REFRESH_N,
+        "params": {"book_size": book_size, "hold_months": hold_months,
+                   "sleeve_count": args.sleeves, "refresh_n": refresh_n,
                    "n_sims": args.sims, "seed": args.seed,
                    "selection": "uniform random draw from composite_score==100 pool"},
         "dates": [str(d) for d in all_dates],
@@ -156,11 +184,14 @@ def main() -> None:
         "spy_curve": spy_equity.tolist(),
         "qqq_curve": qqq_equity.tolist(),
         "summary": summary,
+        "stats": {"portfolio": portfolio_stats, "spy": spy_stats, "qqq": qqq_stats},
+        "sim_stats": sim_stats,
     }
-    OUT.parent.mkdir(parents=True, exist_ok=True)
-    with OUT.open("w") as fh:
-        json.dump(out, fh, indent=2)
-    print(f"wrote {OUT}")
+    out_path = Path(args.out) if args.out else OUT
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    with out_path.open("w") as fh:
+        json.dump(out, fh, indent=2, default=lambda x: None if x != x else x)
+    print(f"wrote {out_path}")
 
 
 if __name__ == "__main__":
