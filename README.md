@@ -40,7 +40,7 @@ component visible in the dashboard below.
 Every scored ticker as a filterable card grid — composite score, sector,
 market cap, and a long/short/watch verdict — sorted best-first.
 
-![Stocks screener](docs/images/stocks_screener.png)
+![Stocks screener](docs/images/stock_screener.png)
 
 - **Filter** by sector, score band, market cap, or LLM research verdict
 - **Search** any ticker or company name directly
