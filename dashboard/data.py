@@ -5,18 +5,12 @@ Every accessor is:
 * **read-only** — no INSERT/UPDATE/DELETE anywhere
 * **cached** — wrapped in :func:`streamlit.cache_data` so a page render
   does not hit SQLite on every widget interaction
-
-The Portfolio page's model book reuses the research ablation engine's own
-``select_book`` / ``base_weights`` / ``sector_overlay`` helpers, so what the
-dashboard shows is byte-identical to the ratified construction
-(top-25% / cap5 / 50-50 SPY-QQQ ``blend_match`` sector targets).
 """
 from __future__ import annotations
 
 import json
 import sqlite3
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any
 
 import pandas as pd
@@ -28,7 +22,6 @@ from dashboard import candidates as dcand
 DEFAULT_TTL = 300      # seconds
 ROOT = Path(__file__).resolve().parents[1]
 
-TOP_PCT = 0.25         # ratified book construction
 SUMMARY_CSV = ROOT / "output" / "subfactor_expansion" / "summary_3M.csv"
 IC_MONTHLY_CSV = ROOT / "output" / "factor_research" / "ic_monthly.csv"
 
@@ -208,85 +201,6 @@ def load_pe_history(ticker: str, n_days: int = 1260) -> pd.DataFrame:
                            direction="backward")
     merged["pe"] = merged["close"] / merged["ttm_eps"].where(merged["ttm_eps"] > 0)
     return merged[["date", "pe"]].dropna()
-
-
-# ---------------------------------------------------------------------------
-# Portfolio page — the model book
-# ---------------------------------------------------------------------------
-@st.cache_data(ttl=DEFAULT_TTL, show_spinner=False)
-def load_caps(as_of: str) -> pd.Series:
-    """Market-cap proxy per ticker: latest float shares × latest close
-    (same proxy the research pipeline's PIT caps use)."""
-    db = get_database()
-    fs = pd.read_sql_query(
-        "SELECT ticker, float_shares FROM short_interest si "
-        "WHERE date = (SELECT MAX(date) FROM short_interest s2 "
-        "              WHERE s2.ticker = si.ticker AND s2.date <= ?) "
-        "AND float_shares IS NOT NULL", db._conn, params=[as_of])
-    px = pd.read_sql_query(
-        "SELECT ticker, close FROM daily_prices dp "
-        "WHERE date = (SELECT MAX(date) FROM daily_prices d2 "
-        "              WHERE d2.ticker = dp.ticker AND d2.date <= ?)",
-        db._conn, params=[as_of])
-    caps = (fs.set_index("ticker")["float_shares"]
-            * px.set_index("ticker")["close"]).dropna()
-    return caps[caps > 0]
-
-
-@st.cache_data(ttl=DEFAULT_TTL, show_spinner=False)
-def load_model_book(as_of: str | None = None) -> dict[str, Any]:
-    """Compute the ratified model book from the latest composite scores.
-
-    Returns {"book": DataFrame, "targets": DataFrame, "as_of": str}.
-    ``book``: ticker, company_name, sector, weight, composite_score, price.
-    ``targets``: sector × [book, blend_target, spy_target, qqq_target].
-    """
-    from research.ablation.engine import (
-        AblationConfig, _fill_median, _qqq_members, base_weights,
-        sector_overlay, select_book,
-    )
-
-    frame = load_screener(as_of)
-    if frame.empty:
-        return {"book": pd.DataFrame(), "targets": pd.DataFrame(), "as_of": None}
-    d = frame["as_of_date"].iloc[0]
-    scores = frame.set_index("ticker")["composite_score"].dropna()
-    sectors = frame.set_index("ticker")["sector"].fillna("Unknown")
-    caps = load_caps(d).reindex(scores.index)
-    data = SimpleNamespace(caps=pd.DataFrame([caps], index=[d]), sectors=sectors)
-    cfg = AblationConfig(name="model_book", top_pct=TOP_PCT, weighting="cap5",
-                         sector="blend_match", hold_months=1)
-
-    names = select_book(scores, TOP_PCT, None, [])
-    w = base_weights(cfg, names, scores, d, data)
-    w = sector_overlay(w, cfg, scores.index.tolist(), d, data)
-    w = w / w.sum()
-
-    book = (frame.set_index("ticker")
-            .loc[w.index, ["company_name", "sector", "composite_score", "price"]]
-            .assign(weight=w)
-            .sort_values("weight", ascending=False)
-            .reset_index())
-
-    # Sector targets for the allocation chart (same math as blend_match).
-    ucaps = _fill_median(data.caps.loc[d].reindex(scores.index))
-    uni_sec = sectors.reindex(scores.index).fillna("Unknown")
-    spy_tgt = ucaps.groupby(uni_sec).sum()
-    spy_tgt = spy_tgt / spy_tgt.sum()
-    members = [t for t in _qqq_members() if t in caps.index]
-    mc = caps.reindex(members).dropna()
-    qqq_tgt = mc.groupby(sectors.reindex(mc.index)).sum()
-    qqq_tgt = qqq_tgt / qqq_tgt.sum()
-    idx = spy_tgt.index.union(qqq_tgt.index)
-    spy_tgt = spy_tgt.reindex(idx).fillna(0.0)
-    qqq_tgt = qqq_tgt.reindex(idx).fillna(0.0)
-    blend = 0.5 * spy_tgt + 0.5 * qqq_tgt
-    held = w.groupby(sectors.reindex(w.index)).sum().reindex(idx).fillna(0.0)
-    targets = pd.DataFrame({"book": held, "blend_target": blend,
-                            "spy_target": spy_tgt, "qqq_target": qqq_tgt})
-    targets = targets[targets.max(axis=1) > 0.001].sort_values(
-        "blend_target", ascending=False)
-    return {"book": book, "targets": targets, "as_of": d}
 
 
 # ---------------------------------------------------------------------------

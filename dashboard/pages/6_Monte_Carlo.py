@@ -42,17 +42,6 @@ CONFIGS = {
             "eviction rule)."
         ),
     },
-    "managed": {
-        "label": "Managed book — k=5, cap9/trail10%/rankfloor75%",
-        "path": ROOT / "output" / "monte_carlo_managed_book" / "k5_results.json",
-        "color": "#d97706",
-        "blurb": (
-            "A single 5-name book with the v3 loop-engineering exit rule (9-month "
-            "time cap OR 10% trailing stop OR falling into the worst quartile of "
-            "the scored universe, 1-week minimum hold), but entries are a uniform "
-            "random draw from the score==100 pool instead of top-k-by-score."
-        ),
-    },
 }
 BENCH_COLOR = {"SPY": "#64748b", "QQQ": "#94a3b8"}
 
@@ -85,15 +74,6 @@ for key, meta in CONFIGS.items():
     spy = np.array(data["spy_curve"]) * 1000.0
     qqq = np.array(data["qqq_curve"]) * 1000.0
 
-    insider_curve, insider_stats = None, None
-    if key == "sleeves":
-        pool_path = ROOT / "output" / "loop_research" / "pool_comparison.json"
-        pool_data = load_config(str(pool_path))
-        if pool_data is not None:
-            top100 = pool_data["top100"]
-            insider_curve = np.array(top100["insider_curve"]) * 1000.0
-            insider_stats = top100["insider_stats"]
-
     BAND_COLOR = "rgba(96, 165, 250, 0.28)"   # light blue
     MEDIAN_COLOR = "#1e3a8a"                  # dark blue
     LINE_COLORS = {"SPY": "#ea580c", "QQQ": "#059669"}   # distinct, dashed
@@ -113,16 +93,8 @@ for key, meta in CONFIGS.items():
                     line=dict(color=LINE_COLORS["QQQ"], width=1.75, dash="dash"),
                     name="QQQ")
 
-    INSIDER_COLOR = "#e87ba4"   # magenta, distinct from median/SPY/QQQ
-    if insider_curve is not None and len(insider_curve) == len(dates):
-        fig.add_scatter(x=dates, y=insider_curve, mode="lines",
-                        line=dict(color=INSIDER_COLOR, width=3),
-                        name="Top-5 by insider score (deterministic)")
-
     end_markers = [(median[-1], MEDIAN_COLOR), (spy[-1], LINE_COLORS["SPY"]),
                   (qqq[-1], LINE_COLORS["QQQ"])]
-    if insider_curve is not None and len(insider_curve) == len(dates):
-        end_markers.append((insider_curve[-1], INSIDER_COLOR))
     for y_end, color in end_markers:
         fig.add_annotation(x=dates[-1], y=y_end, text=f"${y_end:,.0f}",
                            showarrow=False, xanchor="left", xshift=8,
@@ -153,14 +125,6 @@ for key, meta in CONFIGS.items():
             "Sortino": s["sortino"], "Max DD": s["max_dd"],
             "Beta (vs SPY)": s["beta"], "Alpha (vs SPY, ann.)": s["alpha"],
         })
-        if insider_stats is not None and name == "portfolio":
-            rows.append({
-                "": "Top-5 by insider score (deterministic)",
-                "CAGR": insider_stats["cagr"], "Sharpe": insider_stats["sharpe"],
-                "Sortino": insider_stats["sortino"], "Max DD": insider_stats["max_dd"],
-                "Beta (vs SPY)": insider_stats["beta"],
-                "Alpha (vs SPY, ann.)": insider_stats["alpha"],
-            })
     table = pd.DataFrame(rows).set_index("")
     st.dataframe(
         table.style.format({
@@ -171,18 +135,86 @@ for key, meta in CONFIGS.items():
         use_container_width=True, height=42 + 35 * len(table))
     st.caption(f"Params: `{json.dumps(params)}`. Portfolio stats are the mean "
               f"across all {summary['n_sims']} random-draw sims.")
-    if insider_stats is not None:
-        st.caption("Magenta line: instead of a uniform random draw, deterministically "
-                  "pick the top 5 by insider parent score (ins_no_selling_flag / "
-                  "ins_cluster_buyers_180d / ins_sell_pressure_inv) from the score==100 "
-                  "pool each review. Found via research/loop_research (93-candidate "
-                  "batch, 2026-09-09): beats the random baseline on 98.4% of paired "
-                  "seeds, 95% CI on the paired Sharpe difference entirely positive. "
-                  "Research finding only, not wired into production selection — see "
-                  "research/loop_research/session_log.md and champion.md for the full "
-                  "writeup, including the scope-limited caveat (works best as a "
-                  "tie-breaker within this already-elite pool, weaker on a less "
-                  "pre-screened pool).")
+    st.divider()
+
+INSIDER_REV_PATH = ROOT / "output" / "loop_research" / "insider_revisions_min_perturbation.json"
+insider_rev_data = load_config(str(INSIDER_REV_PATH))
+if insider_rev_data is not None:
+    any_loaded = True
+    st.markdown("### Top-20-pool champion — min(insider, revisions), 0.5x noise")
+    st.caption(
+        "Within the top-20-by-composite-score pool, rank by min(insider parent "
+        "score, revisions parent score) descending — both signals must "
+        "independently clear a bar (floor/AND logic), not a sum or average. "
+        f"Gaussian noise ({insider_rev_data['noise_mult']}x the date's "
+        "cross-sectional std) is added to the ranking score before each sim's "
+        "top-5 selection so the band reflects genuine ranking-sensitivity, not "
+        "just a single deterministic path. Research finding only "
+        "(research/loop_research champion.md, promoted 2026-09-12), not wired "
+        "into production selection.")
+
+    dates_r = insider_rev_data["dates"]
+    p10_r = np.array(insider_rev_data["p10_curve"]) * 1000.0
+    p90_r = np.array(insider_rev_data["p90_curve"]) * 1000.0
+    median_r = np.array(insider_rev_data["median_curve"]) * 1000.0
+    spy_r = np.array(insider_rev_data["spy_curve"]) * 1000.0
+    qqq_r = np.array(insider_rev_data["qqq_curve"]) * 1000.0
+
+    fig_r = go.Figure()
+    fig_r.add_scatter(x=dates_r, y=p90_r, mode="lines", line=dict(width=0),
+                      showlegend=False, hoverinfo="skip")
+    fig_r.add_scatter(x=dates_r, y=p10_r, mode="lines", line=dict(width=0),
+                      fill="tonexty", fillcolor=BAND_COLOR,
+                      name="10th–90th percentile", hoverinfo="skip")
+    fig_r.add_scatter(x=dates_r, y=median_r, mode="lines",
+                      line=dict(color=MEDIAN_COLOR, width=3.5), name="Median")
+    fig_r.add_scatter(x=dates_r, y=spy_r, mode="lines",
+                      line=dict(color=LINE_COLORS["SPY"], width=1.75, dash="dash"),
+                      name="SPY")
+    fig_r.add_scatter(x=dates_r, y=qqq_r, mode="lines",
+                      line=dict(color=LINE_COLORS["QQQ"], width=1.75, dash="dash"),
+                      name="QQQ")
+
+    for y_end, color in [(median_r[-1], MEDIAN_COLOR), (spy_r[-1], LINE_COLORS["SPY"]),
+                         (qqq_r[-1], LINE_COLORS["QQQ"])]:
+        fig_r.add_annotation(x=dates_r[-1], y=y_end, text=f"${y_end:,.0f}",
+                             showarrow=False, xanchor="left", xshift=8,
+                             font=dict(color=color, size=12))
+
+    fig_r.update_layout(
+        height=420, margin=dict(l=10, r=70, t=10, b=10),
+        yaxis_title="Portfolio Value ($1,000 invested)",
+        yaxis=dict(tickprefix="$", gridcolor="rgba(148, 163, 184, 0.15)"),
+        xaxis=dict(gridcolor="rgba(148, 163, 184, 0.15)"),
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.12))
+    st.plotly_chart(fig_r, use_container_width=True, key="insider_rev_chart")
+
+    summary_r = insider_rev_data["summary"]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Sims", summary_r["n_sims"])
+    m2.metric("Median final return", f"{summary_r['median_final_return']:.2f}x")
+    m3.metric("% sims beating SPY", f"{summary_r['pct_sims_beating_spy']:.0%}")
+    m4.metric("% sims beating QQQ", f"{summary_r['pct_sims_beating_qqq']:.0%}")
+
+    rows_r = []
+    for name, label in [("portfolio", "min(insider, revisions)"), ("spy", "SPY"), ("qqq", "QQQ")]:
+        s = insider_rev_data["stats"][name]
+        rows_r.append({
+            "": label, "CAGR": s["cagr"], "Sharpe": s["sharpe"],
+            "Sortino": s["sortino"], "Max DD": s["max_dd"],
+            "Beta (vs SPY)": s.get("beta"), "Alpha (vs SPY, ann.)": s.get("alpha"),
+        })
+    table_r = pd.DataFrame(rows_r).set_index("")
+    st.dataframe(
+        table_r.style.format({
+            "CAGR": "{:+.1%}", "Sharpe": "{:.2f}", "Sortino": "{:.2f}",
+            "Max DD": "{:.1%}", "Beta (vs SPY)": "{:.2f}",
+            "Alpha (vs SPY, ann.)": "{:+.1%}",
+        }),
+        use_container_width=True, height=42 + 35 * len(table_r))
+    st.caption(f"Params: `{json.dumps(insider_rev_data['params'])}`. Portfolio "
+              f"stats are the mean across all {summary_r['n_sims']} noise sims.")
     st.divider()
 
 if not any_loaded:

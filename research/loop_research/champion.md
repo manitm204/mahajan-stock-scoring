@@ -176,3 +176,255 @@ grows). This is the most rigorous significance check run on the champion to
 date, and it confirms rather than weakens the "cautiously survives" verdict.
 Standing caveat unchanged either way: still bootstraps variation within one
 realized 2020-2026 history, not a guarantee across regimes.
+
+## New top-20-pool champion (2026-09-12): insider_revisions_min_top20
+
+After the 101-idea systematic exploration batch and the alpha-adjustment
+correction (below), a new candidate is better-supported than
+`dynamic_ic_momentum_top20_selector` on every axis and is promoted as the
+new top-20-pool champion: `research.loop_research.exploration_batch_100.
+metric_insider_revisions_min` (wired via `make_selector`). Rule: within the
+top-20-by-composite-rank pool, rank by `min(insider_score, revisions_score)`
+descending -- i.e. BOTH insider strength and revisions strength must be
+present, not just one (a floor/AND requirement, not a sum or average).
+
+| metric | baseline | candidate |
+|---|---|---|
+| Sharpe | 0.962 | **1.261** (+0.299, largest of any candidate tested) |
+| CAGR | 0.163 | **0.230** |
+| Alpha vs SPY | 0.047 | **0.108** (largest of any candidate tested) |
+| Beta vs SPY | 0.811 | 0.785 (lower -- not a leverage story) |
+| Max drawdown | -0.216 | -0.245 (worse by ~2.9pp -- the one real cost) |
+
+Win rate 99.2%, perturbation win rate 98.6%. **Alpha-adjusted block
+bootstrap (2026-09-12 methodology, see below) at L=4: p=0.015, IMPROVING
+from the raw p=0.024** -- one of only two candidates in the entire 119-test
+sweep (the other being this exact `==100`-pool champion) whose significance
+gets stronger, not weaker, once beta is controlled for, because it runs at
+lower beta than the baseline. 6 of 7 years positive (only 2022 negative);
+best single year supplies only 31.5% of the total -- the least concentrated
+result found all session.
+
+**Why it's more convincing than just "insider is good" (which we already
+knew):** three sibling combinations of the exact same two parents were also
+tested -- `insider_revisions_sum_top20` (raw bootstrap p=0.243),
+`insider_revisions_product_top20` (p=0.335), and
+`insider_revisions_balance_top20` (smallest gap between the two, p=0.362)
+-- all landed far weaker. The MIN/floor logic specifically (both signals
+must independently clear a bar) is what works; a generic blend of the same
+two parents does not. That sharp separation from three close relatives is
+good evidence this isn't just a lucky pick out of a 100+-idea sweep.
+
+Economic rationale: requiring simultaneous insider-buying conviction AND
+analyst/revisions momentum is a stronger interaction filter than either
+alone -- each factor screens out the other's false positives, rather than
+one strong parent (e.g. insider alone) being allowed to compensate for the
+other being weak or negative.
+
+`dynamic_ic_momentum_top20_selector` is demoted to a close second: it's
+real (alpha-adjusted p=0.060, also improves under beta-adjustment since it
+too runs slightly light on beta) but has a more complex, more-moving-parts
+mechanism (rolling windows, YoY comparison, rotating parent selection) and
+more year-to-year concentration (48% of the edge from one year) than the
+new champion's simple static floor. Kept on record as a validated, still-
+reasonable alternative, not discarded.
+
+### Flagged but NOT promoted: the "recency / re-rating" theme
+
+Two related ideas -- `new_entrant_top20` (freshly promoted into the top-20
+pool) and `scoremom_1m_top20` (composite score risen the most over the
+trailing 1 month) -- both surfaced as leading candidates in the 101-idea
+batch and share a common theme (very recently strong/improving names
+outperform), but **neither is confirmed** once scrutinized the same way as
+the champion above:
+- `scoremom_1m_top20`: alpha-adjusted bootstrap p WORSENS (0.076 -> 0.121)
+  -- it carries meaningfully higher beta than baseline (0.849 vs 0.822), so
+  part of its apparent edge is extra market exposure, not selection skill.
+  Its rank-based sibling `scorerankchange_1m_top20` shows the identical
+  pattern (0.106 -> 0.151, also higher beta).
+- `new_entrant_top20`: alpha-adjustment actually helps (p: 0.133 -> 0.059,
+  it runs at lower beta) but only 4 of 7 years are positive and 54% of the
+  total edge comes from a single year (2022) even after adjustment -- too
+  concentrated to trust yet.
+- Also notable: the exact same score-momentum IDEA at longer lookbacks (2,
+  3, 6, 9, 12 months) collapses hard -- `scoremom_3m_top20` and beyond are
+  among the worst-performing candidates in the entire 101-idea batch. The
+  1-month version sitting right at the edge of a sharp lookback cliff is
+  itself a reason for caution (see session_log.md's "100-idea batch"
+  write-up for the full lookback table).
+
+**Status: promising theme, not a promoted rule.** Worth a dedicated,
+better-controlled follow-up (e.g. testing whether a beta-neutralized or
+smaller, more disciplined version of "recency" survives) before treating
+either as a real finding, rather than folding it in alongside the
+confirmed champion above.
+
+## Alpha-adjustment correction (2026-09-12): raw excess return doesn't control for beta
+
+User-identified gap: the block-bootstrap significance check (and the
+`evaluate_promotion` calendar-time gates -- `avg_monthly_excess`,
+`year_sum`, `n_years_positive`, `majority_years`,
+`best_year_removed_negative`) all originally used the RAW
+`candidate_return - baseline_return` monthly difference. A candidate that
+simply carries more market beta than the baseline shows positive "excess
+return" almost by construction in a mostly-bullish window -- that's
+leverage, not selection skill, and the raw check couldn't distinguish the
+two.
+
+Fix, now wired directly into `research/loop_research/promotion.py`'s
+`evaluate_promotion` (applies to every future candidate automatically, not
+just a one-off script): estimate one full-sample beta per leg (candidate,
+baseline) against SPY, and bootstrap the CAPM-residual difference --
+`(candidate_return - beta_candidate*SPY_return) - (baseline_return -
+beta_baseline*SPY_return)` -- instead of the raw difference. Raw numbers
+are still computed and reported alongside (`raw_avg_monthly_excess`,
+`raw_diff_by_date`, `beta_candidate_monthly`, `beta_baseline_monthly`) for
+transparency.
+
+Reran the top 10 candidates from the 101-idea batch under this correction
+(full table: output/loop_research/alpha_adjusted_top10_bootstrap.json).
+Clean pattern: every candidate with LOWER beta than baseline got MORE
+significant; every candidate with HIGHER beta got weaker, several
+dramatically (`subdiff_ins_no_selling_flag_minus_si_short_pct_float_top20`
+0.076 -> 0.184; the deliberate negative control
+`parents_above_median_contrarian_top20` 0.148 -> 0.437, fully debunked).
+Only `insider_revisions_min_top20` and `top5_by_insider` are unambiguously
+confirmed once beta is controlled for -- see the champion sections above.
+Full narrative + per-candidate table: session_log.md and the published
+promotion-audit report (output/loop_research/promotion_audit_report.html).
+
+## 10-idea challenge batch (2026-09-12): champion survives, one near-miss flagged
+
+10 new ideas tested one at a time directly against `insider_revisions_min_top20`
+itself (not the random baseline) via `research.loop_research.
+exploration_batch_2026_09_12` -- full table in session_log.md. 9 of 10
+REJECTED cleanly (adding a 3rd floor leg, chasing insider re-rating or
+stability, risk-scaling the floor by volatility, OR-instead-of-AND logic,
+subfactor-level granularity, and diluting freshness into a smooth tenure
+continuum all failed, several badly). Champion is unchanged.
+
+One near-miss, not promoted: `insider_revisions_min_new_entrant_top20`
+(the floor plus a bonus for names freshly promoted into the top-20 pool
+this month) clears every mechanical gate except one -- Sharpe +0.143, 100%
+win rate, alpha improves, drawdown improves, 63.6% perturbation win rate,
+and passes leave-one-year-out for 6 of 7 years. It fails only because
+removing the single best year (2022) leaves the cumulative edge at -0.0104
+(essentially flat, not a real reversal) -- a much healthier failure mode
+than the earlier standalone `new_entrant_top20` (which concentrated 54% of
+its edge in 2022 alone). Flagged as PROMISING, worth an alpha-adjusted
+block-bootstrap significance check before any promotion decision.
+
+## Noise-robustness deep dive (2026-09-13, user-driven): champion vs. new-entrant
+
+Follow-on user session digging into exactly how the perturbation-robustness
+gate works and whether `insider_revisions_min_new_entrant_top20`'s
+apparent edge over the champion survives scrutiny. Scripts:
+`research.loop_research.perturbation_sweep` (noise-multiple sweep vs.
+random), `research.loop_research.bootstrap_two` (alpha-adjusted block
+bootstrap for both strategies vs. random), `research.loop_research.
+compare_three` (pick-overlap + head-to-head stats for champion /
+new-entrant / a pure 1-month score-momentum control).
+
+**Mechanism recap.** The perturbation test (`make_perturbed_selector` in
+`exploration_batch_2026_09_11.py`) adds independent Gaussian noise to each
+pool stock's ranking score every month: `noise_std = noise_mult * that
+month's own cross-sectional std of the score` (default `noise_mult=0.5`).
+For the champion this is on the raw ~0-100 `min(insider,revisions)` scale
+(typical std ~9.9); for new-entrant it's on the combined `floor_rank +
+0.5*is_new` scale (~0-1.5, typical std ~0.49) -- different absolute units,
+same *relative* amount of scrambling by construction.
+
+**How much noise actually moves things (81 months x 30 draws/level):**
+
+| noise_mult | champion avg rank change (/20) | champion avg top-5 flips | new-entrant avg rank change (/20) | new-entrant avg top-5 flips |
+|---|---|---|---|---|
+| 0.5 | 2.30 | 1.27 | 2.09 | 1.11 |
+| 1.0 | 3.63 | 2.04 | 3.49 | 1.92 |
+| 1.5 | 4.43 | 2.50 | 4.32 | 2.41 |
+| 2.0 | 4.92 | 2.76 | 4.84 | 2.69 |
+| 3.0 | 5.48 | 3.08 | 5.44 | 3.06 |
+| 4.0 | 5.76 | 3.25 | 5.71 | 3.23 |
+
+The two strategies get scrambled by almost identical amounts at every
+noise level -- a fair, apples-to-apples comparison of what happens next.
+
+**Noise-multiple sweep, win rate vs. random_top20_selector:**
+
+| noise_mult | champion win rate | new-entrant win rate |
+|---|---|---|
+| 0.5 | 98.6% | 100.0% |
+| 1.0 | 94.4% | 97.5% |
+| 1.5 | 90.0% | 93.5% |
+| 2.0 | 83.0% | 86.5% |
+| 3.0 | 77.2% | 78.5% |
+| 4.0 | 69.2% | 71.0% |
+
+Both decay gracefully and monotonically with no cliff -- the signature of
+a broad effect, not a knife-edge artifact. New-entrant wins slightly more
+often than the champion at every level vs. random.
+
+**But the head-to-head comparison at 1x noise tells a different story.**
+Full stats (100 real Monte Carlo sims each, `H.sim_metrics`):
+
+| metric | champion 0x | champion 1x noise (mean) | new-entrant 0x | new-entrant 1x noise (mean) |
+|---|---|---|---|---|
+| Sharpe | 1.261 | 1.229 (-0.035, -2.8%) | 1.404 | 1.221 (-0.195, -13.9%) |
+| Alpha vs SPY | 10.83% | 9.65pp (-1.17pp, -10.8%) | 12.87% | 9.32pp (-3.61pp, -28.0%) |
+| CAGR | 22.96% | 21.90% | 26.25% | 21.75% |
+| Max DD | -24.48% | -23.79% | -21.15% | -22.21% |
+
+**Key finding: new-entrant loses ~3x the alpha and ~5x the Sharpe that the
+champion loses, from an equally-sized noise scramble (3.49-3.63 avg rank
+change either way) -- and its post-noise stats end up statistically
+indistinguishable from (very slightly worse than) the champion's own
+post-noise stats**, despite starting ~2pp of alpha ahead at 0x. Only 4% of
+new-entrant's noisy sims beat its own 0x version (vs. 36% for the
+champion) -- its clean result sits further out on its own noise
+distribution's tail than the champion's does.
+
+**Interpretation:** new-entrant's entire incremental edge over the
+champion appears to be riding on a small number of precisely-ordered,
+noise-sensitive picks (correctly identifying which handful of *freshly
+arrived* names also have strong insider/revisions floors) rather than a
+robust structural effect. This is consistent with, and helps explain,
+everything else found about this candidate: it shares only ~60% of its
+picks with the champion (`compare_three.py` overlap analysis), and its
+significance vs. random -- while nominally stronger than the champion's on
+a pure alpha-adjusted block-bootstrap basis (p=0.0002 vs p=0.0148 at L=4,
+see `bootstrap_two.py` output below) -- does not survive a noise stress
+test nearly as well as the champion's own edge does. **Net read: the
+simpler mechanism (plain floor, no recency tilt) is the more durable one.**
+The bootstrap comparison alone would have argued for treating new-entrant
+as the stronger finding; the noise-sensitivity comparison argues the
+opposite; taken together, this is a genuine case where standard
+significance testing and robustness testing point in different directions,
+and the honest conclusion is "not clearly better than the champion,"
+not "clearly better."
+
+**Alpha-adjusted block bootstrap vs. random_top20_selector (L=1,3,4,6,12
+months, `research.loop_research.bootstrap_two`):**
+
+| block_len | champion p-value | champion CI excludes 0? | new-entrant p-value | new-entrant CI excludes 0? |
+|---|---|---|---|---|
+| 1 | 0.0126 | yes | <0.0001 | yes |
+| 3 | 0.0152 | yes | 0.0004 | yes |
+| 4 | 0.0148 | yes | 0.0002 | yes |
+| 6 | 0.0232 | yes | 0.0008 | yes |
+| 12 | 0.0570 | **no** | 0.0002 | yes |
+
+New-entrant's CI stays clear of zero at every block length tested
+(including L=12, where the champion's own CI touches zero and loses
+significance) -- on this test alone, new-entrant looks like the more
+robust finding. This is the tension the noise-sensitivity analysis above
+resolves: new-entrant's total edge over random is real and well-supported,
+but a large share of it is likely the same effect the champion already
+captures (shared ~60% of picks), amplified -- not a clean, independent,
+equally-durable addition on top.
+
+**Status unchanged: champion remains `insider_revisions_min_top20`.**
+`insider_revisions_min_new_entrant_top20` is downgraded from "PROMISING,
+worth a bootstrap check" to "real edge vs. random, but incremental value
+over the champion looks fragile under noise -- not recommended for
+promotion without further work" (e.g. per-year decomposition of the
+new-entrant-specific incremental contribution, isolated from the shared
+floor logic).

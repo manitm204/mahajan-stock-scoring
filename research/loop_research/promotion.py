@@ -125,17 +125,36 @@ def _masked_median_sharpe_alpha(raw, spy, mask, dates):
     return _median(sharpes), _median(alphas)
 
 
+def compute_baseline_paths(baseline_selector, *, bundle=None, n_sims=500, seed_base=0):
+    """Precompute a baseline's (raw, metrics) once so many `evaluate_promotion`
+    calls against the SAME baseline (e.g. a 100-idea batch challenging one
+    fixed champion) don't each redundantly re-simulate it. Pass the result
+    as `baseline_precomputed` below."""
+    bundle = bundle or H.get_data()
+    spy_full, qqq_full = H.bench_series(bundle)
+    dates = list(bundle["data"].rebal_dates)[:-1]
+    spy = spy_full.reindex(dates).fillna(0.0)
+    qqq = qqq_full.reindex(dates).fillna(0.0)
+    return _collect_paths(bundle, baseline_selector, n_sims, seed_base, False, dates, spy, qqq)
+
+
 def evaluate_promotion(candidate_selector, *, baseline_selector=None,
                        make_perturbed_selector=None, n_sims=500, seed_base=0,
-                       deterministic_candidate=True, noise_mult=DEFAULT_NOISE_MULT):
+                       deterministic_candidate=True, noise_mult=DEFAULT_NOISE_MULT,
+                       bundle=None, baseline_precomputed=None):
     """Runs the full promotion protocol for one candidate selector against a
     baseline (default: harness.random_selector, the production featured
     config). Returns a dict: decision, reject_gates, promote_gates,
     candidate_metrics, baseline_metrics, per_year table, leave-one-year-out
     detail, reasons.
+
+    `baseline_precomputed`: optional (raw, metrics) tuple from
+    `compute_baseline_paths`, to skip re-simulating an unchanged baseline
+    across many calls (e.g. a large batch challenging one fixed champion).
+    Must have been computed with the same n_sims/seed_base.
     """
     baseline_selector = baseline_selector or H.random_selector
-    bundle = H.get_data()
+    bundle = bundle or H.get_data()
     spy_full, qqq_full = H.bench_series(bundle)
     dates = list(bundle["data"].rebal_dates)[:-1]
     spy = spy_full.reindex(dates).fillna(0.0)
@@ -143,8 +162,11 @@ def evaluate_promotion(candidate_selector, *, baseline_selector=None,
 
     cand_raw, cand_metrics = _collect_paths(
         bundle, candidate_selector, n_sims, seed_base, deterministic_candidate, dates, spy, qqq)
-    base_raw, base_metrics = _collect_paths(
-        bundle, baseline_selector, n_sims, seed_base, False, dates, spy, qqq)
+    if baseline_precomputed is not None:
+        base_raw, base_metrics = baseline_precomputed
+    else:
+        base_raw, base_metrics = _collect_paths(
+            bundle, baseline_selector, n_sims, seed_base, False, dates, spy, qqq)
 
     cand_sharpes = [m["sharpe"] for m in cand_metrics]
     base_sharpes = [m["sharpe"] for m in base_metrics]

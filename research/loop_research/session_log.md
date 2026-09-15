@@ -822,6 +822,13 @@ reference/fallback baseline distribution for future top-20-pool
 experiments; this selector is now the bar new candidates on this pool must
 beat. See champion.md for the consolidated summary.
 
+**Superseded 2026-09-12** -- see the "New top-20-pool champion" entry near
+the end of this log and champion.md: `insider_revisions_min_top20`,
+found in the later 101-idea batch, is better-supported on every axis
+(alpha-adjusted p=0.015 vs 0.060, less concentrated, higher Sharpe/alpha)
+and is now the champion. `dynamic_ic_momentum_top20_selector` is kept on
+record as a validated, still-reasonable runner-up, not discarded.
+
 ### worst_week_return_top20 -- REJECTED
 **Hypothesis (user, 2026-09-11):** short-term oversold/mean-reversion --
 within the top-20 pool, prefer names that fell the most over the trailing
@@ -935,8 +942,90 @@ should look like. This is the same failure mode, and the same diagnostic
 (per-calendar-time breakdown) that caught the earlier decile-1-minus-100
 insider-edge false positive -- a good illustration of why the mechanical
 8-gate rule alone is not sufficient and the block-bootstrap +
-per-year-breakdown follow-up matters. Champion for the top-20-pool track
-remains unchanged: `dynamic_ic_momentum_top20_selector`.
+per-year-breakdown follow-up matters. Champion for the top-20-pool track at
+the time was `dynamic_ic_momentum_top20_selector`; superseded 2026-09-12 by
+`insider_revisions_min_top20` (see below).
+
+## New top-20-pool champion (2026-09-12): insider_revisions_min_top20
+
+Found in the 101-idea systematic exploration batch (see that section
+above): within the top-20 pool, rank by `min(insider_score,
+revisions_score)` descending -- both insider AND revisions strength must
+be present, not a sum or average. Full detail in champion.md's "New
+top-20-pool champion" section; summary here for the log's continuity:
+
+- Alpha-adjusted block bootstrap (see "Alpha-adjustment correction" below)
+  at L=4: **p=0.015**, improving from the raw p=0.024 -- confirms rather
+  than weakens under beta-adjustment, since it runs at LOWER beta (0.79)
+  than the baseline (0.82). One of only two candidates in the entire
+  119-test sweep with this property (the other is `top5_by_insider`).
+- Sharpe +0.299 and alpha +0.108 vs baseline, both the largest of any
+  candidate tested this session. 6 of 7 years positive; best single year
+  supplies only 31.5% of the total -- the least concentrated result found.
+- Three sibling combinations of the same two parents (`_sum`, `_product`,
+  `_balance`) all landed far weaker (raw bootstrap p 0.24-0.36) -- the
+  min/floor logic specifically is what works, which is good evidence
+  against "just a lucky pick out of a big sweep."
+- Honest cost: max drawdown ~2.9pp worse than baseline.
+- `dynamic_ic_momentum_top20_selector` remains a validated runner-up (p=0.060
+  alpha-adjusted) but is demoted from champion: more complex mechanism,
+  more year-to-year concentration (48% vs 31.5%).
+
+**Also flagged, not promoted:** a "recency / re-rating" theme
+(`new_entrant_top20`, `scoremom_1m_top20`) looked promising in the raw
+101-idea results but did not hold up to the same scrutiny -- see
+champion.md for the full breakdown (one weakens under alpha-adjustment due
+to extra beta, the other stays too concentrated in a single year, and the
+underlying idea shows a sharp lookback-length cliff at 2+ months). Kept as
+an open research question, not a finding.
+
+## Alpha-adjustment correction (2026-09-12, user request)
+
+User's methodological critique: raw `candidate - baseline` monthly excess
+return (what the block bootstrap and `evaluate_promotion`'s calendar-time
+gates used) doesn't control for beta -- a candidate that simply carries
+more market exposure than the baseline shows positive "excess return"
+almost by construction in a mostly-bullish window, which is leverage, not
+selection skill.
+
+Fix wired directly into `research/loop_research/promotion.py`'s
+`evaluate_promotion` (applies automatically to every future candidate, not
+a one-off script): estimate one full-sample beta per leg against SPY, and
+use the CAPM-residual difference -- `(candidate_return -
+beta_candidate*SPY_return) - (baseline_return - beta_baseline*SPY_return)`
+-- everywhere the raw difference used to feed `avg_monthly_excess`,
+`year_sum`, `n_years_positive`, `majority_years`,
+`best_year_removed_negative`, and the series handed to the block bootstrap.
+Raw numbers are kept alongside (`raw_avg_monthly_excess`, `raw_diff_by_date`,
+`beta_candidate_monthly`, `beta_baseline_monthly`) for transparency, not
+deleted. Verified the wiring reproduces the manual rerun's numbers exactly
+(beta and alpha-adjusted excess match to 3-4 decimal places).
+
+Reran the top 10 candidates from the 101-idea batch under this correction
+(output/loop_research/alpha_adjusted_top10_bootstrap.json). Clean, fully
+consistent pattern: every candidate with LOWER beta than its baseline got
+MORE significant after adjustment; every candidate with HIGHER beta got
+weaker, several dramatically:
+
+| test | beta (cand/base) | p, raw | p, alpha-adjusted |
+|---|---|---|---|
+| top5_by_insider | 0.81/0.82 (lower) | 0.014 | 0.009 |
+| insider_revisions_min_top20 | 0.79/0.82 (lower) | 0.024 | 0.015 |
+| dynamic_ic_momentum_top20_selector | 0.80/0.82 (lower) | 0.078 | 0.060 |
+| new_entrant_top20 | 0.78/0.82 (lower) | 0.133 | 0.059 |
+| scoremom_1m_top20 | 0.85/0.82 (higher) | 0.076 | 0.121 |
+| scorerankchange_1m_top20 | 0.84/0.82 (higher) | 0.106 | 0.151 |
+| subdiff_qual_earnings_stability_3y_minus_grw_earnings_surprise_top20 | 0.84/0.82 (higher) | 0.124 | 0.156 |
+| subdiff_ins_no_selling_flag_minus_si_short_pct_float_top20 | 0.90/0.82 (higher) | 0.076 | 0.184 |
+| subdiff_inst_investors_holding_change_minus_si_short_pct_float_top20 | 0.87/0.82 (higher) | 0.152 | 0.228 |
+| parents_above_median_contrarian_top20 (negative control) | 0.93/0.82 (higher) | 0.148 | 0.437 |
+
+Full write-up, ranked synthesis, and the published HTML report:
+output/loop_research/promotion_audit_report.html (includes a dedicated
+"Alpha-adjusted reanalysis" section). Decided NOT to re-run the full
+119-test sweep under the new standard -- applies going forward only, per
+user instruction; the top-10 correction above stands as the historical
+record for what came before.
 
 ## 10-idea exploration batch (2026-09-11, user request): deliberately unrelated mechanisms
 
@@ -1043,3 +1132,115 @@ meaningfully more convincing than either mechanical PROMOTE here). Both
 `new_entrant_top20` and `parent_breadth_top20` are kept on record as
 PROMISING candidates (parent_breadth the stronger of the two) rather than
 promoted or discarded.
+
+## 10-idea exploration batch (2026-09-12, user request): challenging the NEW champion
+
+Prior batches all tested candidates against the random baseline. This batch
+tests against the current champion itself, `insider_revisions_min_top20`
+(see "New top-20-pool champion" above) -- i.e. "can anything beat the
+champion", not "can anything beat random". Same discipline as before: one
+idea proposed, tested, and recorded before writing the next. Code:
+`research.loop_research.exploration_batch_2026_09_12` (10 `metric_fn`s,
+reuses `make_selector`/`make_perturbed_selector` from the 2026-09-11 batch).
+Per-idea full reports: `output/loop_research/promotion_<name>.json`;
+compact summaries: `output/loop_research/experiments/<name>.json`.
+
+| idea | mechanism | decision | headline |
+|---|---|---|---|
+| min3_insider_revisions_quality | 3-way floor, +quality | REJECT | Sharpe -0.187, win 0%, 3/7yr |
+| min3_insider_revisions_institutional | 3-way floor, +institutional | REJECT | Sharpe +0.053 but perturbation 37.4%, dd -6.7pp worse, best-year-removed negative |
+| insider_momentum_top20 | insider PARENT re-rating (3mo) | REJECT | Sharpe -0.184, 1/7yr, perturbation 5.2% |
+| insider_revisions_rankproduct_top20 | percentile-rank product | REJECT | Sharpe -0.077, 2/7yr |
+| insider_revisions_min_riskadj_top20 | floor / trailing 3mo vol | REJECT | Sharpe -0.522, 0/7yr, perturbation 0% |
+| insider_stability_top20 | lowest 6mo insider-score vol | REJECT | Sharpe -0.467, 0/7yr, perturbation 0% |
+| insider_revisions_max_top20 | OR logic (max, not min) | REJECT | Sharpe -0.083, 3/7yr -- confirms AND beats OR |
+| subfactor_insider_revisions_min_top20 | floor at subfactor level | REJECT | Sharpe +0.007 (wash), perturbation 27.2% |
+| **insider_revisions_min_new_entrant_top20** | **floor + binary "new to pool this month" bonus** | **REJECT (barely)** | **Sharpe +0.143, win 100%, perturbation 63.6%, alpha improves, 6/7yr LOO pass -- fails ONLY because best-year(2022)-removed = -0.0104 (essentially flat)** |
+| insider_revisions_min_inverse_tenure_top20 | floor + continuous inverse-tenure bonus | REJECT | Sharpe +0.004 (wash) -- confirms idea 9's gain is specific to "brand new this month", not a smooth recency effect |
+
+**Headline pattern, consistent with every prior batch: additive/defensive
+tilts and momentum-chasing on the floor's own inputs all fail.** Adding a
+third parent as another floor leg (quality, institutional) either hurts
+outright or is fragile; chasing recent change in the insider signal itself
+(momentum, or its inverse, stability) is actively harmful (0-1 years
+positive, perturbation win rates near 0%); risk-scaling the floor by
+volatility is the worst result of the batch. The OR/max contrast confirms
+the champion's AND/min logic specifically (not just "insider or revisions
+is informative") is what drives the edge.
+
+**Standout finding, not promoted but worth a dedicated follow-up:**
+`insider_revisions_min_new_entrant_top20` clears every gate except one, and
+misses that one by a hair. Unlike the earlier `new_entrant_top20` (tested
+alone against random, REJECTED for being too concentrated in 2022), pairing
+the freshness signal with the insider/revisions floor as a bonus rather
+than a standalone rule produces a materially more robust result -- 63.6%
+perturbation win rate (vs. no perturbation robustness reported for the
+standalone version's fragile case) and passes leave-one-year-out cleanly
+for 6 of 7 years. The one failure (2022 best-year-removed) is a razor's
+edge (-0.0104, not a real reversal) rather than the kind of 60-90%
+single-year concentration that sank prior false positives. Recommended
+next step if this is picked back up: run the alpha-adjusted block bootstrap
+(same treatment as the champion) before any promotion decision -- the
+mechanical 8-gate rule alone is not sufficient evidence either way, exactly
+per the standing lesson from every prior near-miss in this project.
+
+**Net for this batch: no change to the top-20-pool champion**
+(`insider_revisions_min_top20` remains champion). Nothing promoted; one
+candidate (`insider_revisions_min_new_entrant_top20`) flagged as PROMISING
+and worth revisiting with the full significance-check battery, the rest
+cleanly rejected with no ambiguity.
+
+## 100-idea systematic challenge batch (2026-09-12/13, user request): stopped at 74/100 by user
+
+Follow-on to the 10-idea batch above: 100 systematically generated,
+standalone (non-insider/revisions-specific) top-20-pool ideas, each tested
+one at a time directly against `insider_revisions_min_top20`. Code:
+`research.loop_research.exploration_batch_2026_09_12_100`
+(`generate_ideas()`, 7 families: 28 parent-pair MIN combos, 32 subfactor-
+level rankings across all 8 parent groups, 10 valuation mean-reversion
+variants, 5 parent-level reversion variants, 8 per-parent subfactor-breadth
+counts, plus one-off ideas -- min/max across all 8 parents, cross-sectional
+dispersion, hard-threshold gates, a 3-way average, literal random picks).
+Performance note: added `promotion.compute_baseline_paths` +
+`baseline_precomputed=` to `evaluate_promotion` so the (unchanged) champion
+baseline is simulated ONCE for the whole batch instead of once per idea --
+this is what made a 100-idea run practical (~55s/idea instead of ~2-4min).
+Every result written immediately to `promotion_<name>.json` /
+`experiments/<name>.json`, plus a running `batch100_manifest.jsonl` line
+per idea, so the run is fully crash-resilient and resumable (skips any
+idea whose experiment JSON already exists).
+
+**Stopped by user request at 74/100 completed** (remaining 26 -- the rest
+of family E parent-level reversion, family F/G price-reversion, family H
+per-parent breadth, and the misc one-offs -- were never run; can be resumed
+by re-launching the same module, which will skip the 74 already done).
+
+**Result: all 74 completed ideas REJECTED. Nothing beat the champion.**
+Full ranked list and family-level synthesis written up in the user-facing
+report delivered in chat 2026-09-13 (not duplicated here in full -- see
+chat/PR for the complete table). Headline findings:
+- **Family A (28 parent-pair MIN combos): every non-insider/revisions pair
+  failed**, most badly (mean sharpe delta -0.26, worst -0.62) -- confirms
+  the floor/AND mechanism is specific to insider+revisions, not general.
+  One exact-duplicate sanity check (`parentmin_revisions_insider_top20`,
+  literally `min(revisions,insider)` = the champion itself) correctly
+  returned sharpe_delta=0.0, confirming the harness is internally
+  consistent.
+- **Family B (32 subfactor-level rankings): every one failed**, several
+  catastrophically (0/7 positive years) -- momentum, quality, value,
+  growth, institutional, insider, and short subfactor levels all
+  underperform this baseline badly.
+- **Families C/D/E (14 valuation + parent-level mean-reversion variants,
+  multiple lookbacks 12-60mo): every one failed** -- confirms valuation/
+  contrarian tilts do not work in this pool/window at ANY lookback tested,
+  consistent with the single standalone `valuation_reversion_top20` result
+  from the prior session.
+- Nothing in this batch got close to the still-unbeaten near-miss from the
+  prior 10-idea batch (`insider_revisions_min_new_entrant_top20`,
+  +0.143 Sharpe) -- the best of these 74 was the exact-duplicate control at
+  0.0000.
+
+**Net: champion (`insider_revisions_min_top20`) remains undefeated across
+85 total challenger tests this round** (10 add-on ideas + 1 standalone +
+74 from this batch). The standing PROMISING lead (new-entrant addition) is
+still the only candidate worth further work.

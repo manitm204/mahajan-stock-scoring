@@ -4,8 +4,7 @@ Run with::
 
     streamlit run dashboard/app.py
 
-The home view simply forwards to the Stocks screener — the dashboard is
-three pages (Stocks / Portfolio / Scoring), nothing else.
+The home view simply forwards to the Stocks screener.
 """
 from __future__ import annotations
 
