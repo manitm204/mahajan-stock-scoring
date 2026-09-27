@@ -131,11 +131,6 @@ than that:
 - **Paired against its actual baseline**, not SPY: uniform random draw from
   the *same* top-20 pool, same sleeve mechanics. Sharpe 1.26 vs. 0.96, alpha
   +10.8% vs +4.7%, a **99.2%** paired win rate across 500 seeded sims.
-- **Sibling rules tested and rejected**: a sum, a product, and a "balance"
-  of the exact same two factors were all tried and landed far weaker. The
-  strict floor/AND logic — both signals must clear the bar independently —
-  is specifically what works, not just "insider is good" or "revisions is
-  good."
 - **Significance checked the honest way**: monthly returns are serially
   correlated (4-month holds, staggered reviews), so a naive t-test
   overstates confidence. A moving-block bootstrap over calendar time
