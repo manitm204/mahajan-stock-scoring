@@ -74,7 +74,44 @@ def get_data():
             pickle.dump(bundle, fh)
 
     bundle["subfactor_frames"] = get_subfactor_frames()
+    bundle["mcaps"] = get_mcaps()
+    bundle["above_ema200"] = get_ema200_mask(bundle)
     return bundle
+
+
+def get_ema200_mask(bundle):
+    """{date: Series(ticker -> bool, price > 200-day EMA)} for each rebal
+    date, computed causally off daily closes (pandas ewm is an online/
+    trailing statistic, so no look-ahead). Not disk-cached -- cheap to
+    recompute from the already-loaded price matrix."""
+    data = bundle["data"]
+    px = data.matrix
+    ema = px.ewm(span=200, min_periods=200, adjust=False).mean()
+    above = px > ema
+    return {d: above.loc[d] for d in data.rebal_dates if d in above.index}
+
+
+MCAP_CACHE = REPO / "output" / "loop_research" / "mcap_cache.pkl"
+
+
+def get_mcaps():
+    """Cached {date: Series(ticker -> PIT market cap)} via
+    loserscreen.mcap.market_caps (same PIT-safe implied-shares construction
+    as production DataContext.market_cap), for selectors that tilt toward
+    large caps."""
+    if MCAP_CACHE.exists():
+        with MCAP_CACHE.open("rb") as fh:
+            return pickle.load(fh)
+    from data.db import get_db
+    from loserscreen.mcap import market_caps
+
+    data = load_data()
+    with get_db() as db:
+        mcaps = market_caps(db, list(data.rebal_dates), list(data.matrix.columns), data.matrix)
+    MCAP_CACHE.parent.mkdir(parents=True, exist_ok=True)
+    with MCAP_CACHE.open("wb") as fh:
+        pickle.dump(mcaps, fh)
+    return mcaps
 
 
 SUBFACTOR_CACHE = REPO / "output" / "loop_research" / "subfactor_frames_cache.pkl"
@@ -150,6 +187,202 @@ def random_top20_selector(scores, parent_scores, held, k, refresh_n, rng, ctx=No
     candidates = [t for t in pool if t not in keep]
     rng.shuffle(candidates)
     fill = candidates[:need]
+    if len(fill) < need:
+        universe = list(scores.dropna().index)
+        rng.shuffle(universe)
+        extra = [t for t in universe if t not in keep and t not in fill]
+        fill += extra[:need - len(fill)]
+    return keep + fill
+
+
+def random_top20_ema200_selector(scores, parent_scores, held, k, refresh_n, rng, ctx=None):
+    """Trend filter on top of random_top20_selector (user request
+    2026-09-29): same top-20 composite-score pool and uniform random draw,
+    but skip any candidate trading below its own 200-day EMA (see
+    get_ema200_mask() -- causal/PIT-safe). Falls back to allowing
+    below-EMA names, first within the top-20 pool then the full universe,
+    only if there aren't enough above-EMA candidates to fill k slots."""
+    ranked = scores.dropna().sort_values(ascending=False, kind="stable")
+    pool = list(ranked.index[:TOP_N_POOL])
+    if not pool:
+        return held
+    above = ctx["bundle"]["above_ema200"].get(ctx["date"], pd.Series(dtype=bool)) if ctx else pd.Series(dtype=bool)
+
+    def filt(cands):
+        return [t for t in cands if bool(above.get(t, False))]
+
+    if not held:
+        p = filt(pool)
+        if len(p) < k:
+            p = list(pool)
+        rng.shuffle(p)
+        return p[:k]
+    keep = list(held)
+    n_evict = min(refresh_n, len(keep))
+    to_evict = set(rng.sample(keep, n_evict))
+    keep = [t for t in keep if t not in to_evict]
+    need = k - len(keep)
+    pool_candidates = [t for t in pool if t not in keep]
+    candidates = filt(pool_candidates)
+    if len(candidates) < need:
+        candidates = pool_candidates
+    rng.shuffle(candidates)
+    fill = candidates[:need]
+    if len(fill) < need:
+        universe_candidates = [t for t in scores.dropna().index if t not in keep and t not in fill]
+        universe = filt(universe_candidates)
+        if len(universe) < need - len(fill):
+            universe = universe_candidates
+        rng.shuffle(universe)
+        fill += universe[:need - len(fill)]
+    return keep + fill
+
+
+RANDOM_SUBSET = 10
+
+
+def top20_random10_mktcap5_selector(scores, parent_scores, held, k, refresh_n, rng, ctx=None):
+    """Market-cap tilt within the top-20 pool (user request 2026-09-28):
+    same top-20 composite-score pool as random_top20_selector, but instead
+    of drawing k uniformly at random, first draw a random RANDOM_SUBSET=10
+    from the pool, then take the k largest by PIT market cap (see
+    get_mcaps()) within that subset. Compares against random_top20_selector
+    to isolate whether tilting toward large caps -- among names already tied
+    at the top of the score pool -- helps."""
+    ranked = scores.dropna().sort_values(ascending=False, kind="stable")
+    pool = list(ranked.index[:TOP_N_POOL])
+    if not pool:
+        return held
+    mcaps = ctx["bundle"]["mcaps"].get(ctx["date"], pd.Series(dtype=float)) if ctx else pd.Series(dtype=float)
+
+    def mktcap_pick(candidates, need):
+        if not candidates or need <= 0:
+            return []
+        subset = rng.sample(candidates, min(RANDOM_SUBSET, len(candidates)))
+        ranked_sub = mcaps.reindex(subset).dropna().sort_values(ascending=False, kind="stable")
+        picks = list(ranked_sub.index[:need])
+        if len(picks) < need:
+            leftover = [t for t in subset if t not in picks]
+            rng.shuffle(leftover)
+            picks += leftover[:need - len(picks)]
+        return picks
+
+    if not held:
+        return mktcap_pick(pool, k)
+    keep = list(held)
+    n_evict = min(refresh_n, len(keep))
+    to_evict = set(rng.sample(keep, n_evict))
+    keep = [t for t in keep if t not in to_evict]
+    need = k - len(keep)
+    candidates = [t for t in pool if t not in keep]
+    fill = mktcap_pick(candidates, need)
+    if len(fill) < need:
+        universe = list(scores.dropna().index)
+        rng.shuffle(universe)
+        extra = [t for t in universe if t not in keep and t not in fill]
+        fill += extra[:need - len(fill)]
+    return keep + fill
+
+
+def random_top20_sector_selector(scores, parent_scores, held, k, refresh_n, rng, ctx=None):
+    """Sector-diversified version of random_top20_selector (user request
+    2026-09-29, no market cap involved): same top-20 composite-score pool,
+    but the random draw enforces one pick per GICS sector -- shuffle the
+    pool and walk it, skipping a candidate if its sector is already
+    represented among this period's picks, until k distinct-sector names
+    are found. Falls back to allowing sector repeats (still from the
+    shuffled pool) if the pool doesn't have k distinct sectors."""
+    ranked = scores.dropna().sort_values(ascending=False, kind="stable")
+    pool = list(ranked.index[:TOP_N_POOL])
+    if not pool:
+        return held
+    sector = ctx["bundle"]["data"].sector if ctx else pd.Series(dtype=object)
+
+    def sector_pick(candidates, need):
+        if not candidates or need <= 0:
+            return []
+        shuffled = list(candidates)
+        rng.shuffle(shuffled)
+        picks, used_sectors = [], set()
+        for t in shuffled:
+            if len(picks) >= need:
+                break
+            sec = sector.get(t)
+            if sec is not None and sec in used_sectors:
+                continue
+            picks.append(t)
+            if sec is not None:
+                used_sectors.add(sec)
+        if len(picks) < need:
+            remaining = [t for t in shuffled if t not in picks]
+            picks += remaining[:need - len(picks)]
+        return picks
+
+    if not held:
+        return sector_pick(pool, k)
+    keep = list(held)
+    n_evict = min(refresh_n, len(keep))
+    to_evict = set(rng.sample(keep, n_evict))
+    keep = [t for t in keep if t not in to_evict]
+    need = k - len(keep)
+    candidates = [t for t in pool if t not in keep]
+    fill = sector_pick(candidates, need)
+    if len(fill) < need:
+        universe = list(scores.dropna().index)
+        rng.shuffle(universe)
+        extra = [t for t in universe if t not in keep and t not in fill]
+        fill += extra[:need - len(fill)]
+    return keep + fill
+
+
+def top20_random10_mktcap5_sector_selector(scores, parent_scores, held, k, refresh_n, rng, ctx=None):
+    """Sector-diversified variant of top20_random10_mktcap5_selector (user
+    request 2026-09-28): same top-20 pool / random-10 subset / rank-by-
+    market-cap mechanics, but walk the subset in market-cap order and skip
+    any ticker whose GICS sector is already represented among this period's
+    picks, only taking the next-largest cap once a slot's sector is free.
+    Falls back to allowing sector repeats (still market-cap ordered) if the
+    subset doesn't have enough distinct sectors to fill k slots."""
+    ranked = scores.dropna().sort_values(ascending=False, kind="stable")
+    pool = list(ranked.index[:TOP_N_POOL])
+    if not pool:
+        return held
+    mcaps = ctx["bundle"]["mcaps"].get(ctx["date"], pd.Series(dtype=float)) if ctx else pd.Series(dtype=float)
+    sector = ctx["bundle"]["data"].sector if ctx else pd.Series(dtype=object)
+
+    def mktcap_pick(candidates, need):
+        if not candidates or need <= 0:
+            return []
+        subset = rng.sample(candidates, min(RANDOM_SUBSET, len(candidates)))
+        ranked_sub = mcaps.reindex(subset).dropna().sort_values(ascending=False, kind="stable")
+        picks, used_sectors = [], set()
+        for t in ranked_sub.index:
+            if len(picks) >= need:
+                break
+            sec = sector.get(t)
+            if sec is not None and sec in used_sectors:
+                continue
+            picks.append(t)
+            if sec is not None:
+                used_sectors.add(sec)
+        if len(picks) < need:
+            remaining = [t for t in ranked_sub.index if t not in picks]
+            picks += remaining[:need - len(picks)]
+        if len(picks) < need:
+            leftover = [t for t in subset if t not in picks]
+            rng.shuffle(leftover)
+            picks += leftover[:need - len(picks)]
+        return picks
+
+    if not held:
+        return mktcap_pick(pool, k)
+    keep = list(held)
+    n_evict = min(refresh_n, len(keep))
+    to_evict = set(rng.sample(keep, n_evict))
+    keep = [t for t in keep if t not in to_evict]
+    need = k - len(keep)
+    candidates = [t for t in pool if t not in keep]
+    fill = mktcap_pick(candidates, need)
     if len(fill) < need:
         universe = list(scores.dropna().index)
         rng.shuffle(universe)
