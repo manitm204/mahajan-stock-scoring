@@ -137,6 +137,114 @@ for key, meta in CONFIGS.items():
               f"across all {summary['n_sims']} random-draw sims.")
     st.divider()
 
+# --- Market-neutral variants (each long is hedged with a short) ---------- #
+# Same random long book as above, but every long name is paired with a short
+# leg so portfolio beta collapses toward 0. "% beating SPY/QQQ" is not a
+# meaningful bar for a hedged book, so these show "% sims positive" + beta
+# instead (and read from results.json, which lacks pct_sims_beating_qqq).
+MN_CONFIGS = {
+    "market_neutral": {
+        "label": "Market-neutral — short the sector ETF",
+        "path": ROOT / "output" / "monte_carlo_market_neutral" / "results.json",
+        "portfolio_label": "Long − sector ETF",
+        "blurb": (
+            "Same staggered random long book, but each long name is paired with "
+            "a short of its GICS sector SPDR ETF at 1x the long weight "
+            "(dollar-neutral per name), driving portfolio beta to ~0. Strips out "
+            "market return, leaving the stock-specific residual."
+        ),
+    },
+    "short_worst_in_sector": {
+        "label": "Market-neutral — short a weak same-sector name",
+        "path": ROOT / "output" / "monte_carlo_short_worst_in_sector" / "results.json",
+        "portfolio_label": "Long − weak same-sector short",
+        "blurb": (
+            "Each long name is hedged by shorting one randomly-chosen stock from "
+            "the 3 lowest composite-scored names in its GICS sector (short "
+            "persisted while the long is held). Harvests a within-sector "
+            "good-minus-bad spread at near-zero beta, at the cost of single-name "
+            "short risk."
+        ),
+    },
+}
+MN_BAND_COLOR = "rgba(248, 113, 113, 0.22)"   # light red — distinguishes hedged books
+MN_MEDIAN_COLOR = "#991b1b"
+MN_LINE_COLORS = {"SPY": "#ea580c", "QQQ": "#059669"}
+
+for key, meta in MN_CONFIGS.items():
+    data = load_config(str(meta["path"]))
+    if data is None:
+        continue
+    any_loaded = True
+
+    st.markdown(f"### {meta['label']}")
+    st.caption(meta["blurb"])
+
+    dates = data["dates"]
+    p10 = np.array(data["p10_curve"]) * 1000.0
+    p90 = np.array(data["p90_curve"]) * 1000.0
+    median = np.array(data["median_curve"]) * 1000.0
+    spy = np.array(data["spy_curve"]) * 1000.0
+    qqq = np.array(data["qqq_curve"]) * 1000.0
+
+    fig = go.Figure()
+    fig.add_scatter(x=dates, y=p90, mode="lines", line=dict(width=0),
+                    showlegend=False, hoverinfo="skip")
+    fig.add_scatter(x=dates, y=p10, mode="lines", line=dict(width=0),
+                    fill="tonexty", fillcolor=MN_BAND_COLOR,
+                    name="10th–90th percentile", hoverinfo="skip")
+    fig.add_scatter(x=dates, y=median, mode="lines",
+                    line=dict(color=MN_MEDIAN_COLOR, width=3.5), name="Median")
+    fig.add_scatter(x=dates, y=spy, mode="lines",
+                    line=dict(color=MN_LINE_COLORS["SPY"], width=1.75, dash="dash"),
+                    name="SPY")
+    fig.add_scatter(x=dates, y=qqq, mode="lines",
+                    line=dict(color=MN_LINE_COLORS["QQQ"], width=1.75, dash="dash"),
+                    name="QQQ")
+
+    for y_end, color in [(median[-1], MN_MEDIAN_COLOR), (spy[-1], MN_LINE_COLORS["SPY"]),
+                         (qqq[-1], MN_LINE_COLORS["QQQ"])]:
+        fig.add_annotation(x=dates[-1], y=y_end, text=f"${y_end:,.0f}",
+                           showarrow=False, xanchor="left", xshift=8,
+                           font=dict(color=color, size=12))
+
+    fig.update_layout(
+        height=420, margin=dict(l=10, r=70, t=10, b=10),
+        yaxis_title="Portfolio Value ($1,000 invested)",
+        yaxis=dict(tickprefix="$", gridcolor="rgba(148, 163, 184, 0.15)"),
+        xaxis=dict(gridcolor="rgba(148, 163, 184, 0.15)"),
+        plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.12))
+    st.plotly_chart(fig, use_container_width=True, key=f"{key}_chart")
+
+    summary = data["summary"]
+    port = data["stats"]["portfolio"]
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Sims", summary["n_sims"])
+    m2.metric("Median final return", f"{summary['median_final_return']:+.1%}")
+    m3.metric("% sims positive", f"{summary['pct_sims_positive']:.0%}")
+    m4.metric("Beta (vs SPY)", f"{port['beta']:+.2f}")
+
+    rows = []
+    for name, label in [("portfolio", meta["portfolio_label"]), ("spy", "SPY"), ("qqq", "QQQ")]:
+        s = data["stats"][name]
+        rows.append({
+            "": label, "CAGR": s["cagr"], "Sharpe": s["sharpe"],
+            "Sortino": s["sortino"], "Max DD": s["max_dd"],
+            "Beta (vs SPY)": s.get("beta"), "Alpha (vs SPY, ann.)": s.get("alpha"),
+        })
+    table = pd.DataFrame(rows).set_index("")
+    st.dataframe(
+        table.style.format({
+            "CAGR": "{:+.1%}", "Sharpe": "{:.2f}", "Sortino": "{:.2f}",
+            "Max DD": "{:.1%}", "Beta (vs SPY)": "{:.2f}",
+            "Alpha (vs SPY, ann.)": "{:+.1%}",
+        }),
+        use_container_width=True, height=42 + 35 * len(table))
+    st.caption(f"Params: `{json.dumps(data['params'])}`. Portfolio stats are the "
+              f"mean across all {summary['n_sims']} random-draw sims.")
+    st.divider()
+
 INSIDER_REV_PATH = ROOT / "output" / "loop_research" / "insider_revisions_min_perturbation.json"
 insider_rev_data = load_config(str(INSIDER_REV_PATH))
 if insider_rev_data is not None:
