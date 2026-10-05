@@ -166,6 +166,19 @@ MN_CONFIGS = {
             "short risk."
         ),
     },
+    "short_midlow_in_sector": {
+        "label": "Market-neutral — short a mildly-weak same-sector name (20–40th pctile)",
+        "path": ROOT / "output" / "monte_carlo_short_midlow_in_sector" / "results.json",
+        "portfolio_label": "Long − 20–40th pctile same-sector short",
+        "blurb": (
+            "Each long name is hedged by shorting one randomly-chosen stock from "
+            "the 20th–40th within-sector composite-score percentile band of its "
+            "GICS sector (short persisted while the long is held). Avoids shorting "
+            "the absolute bottom names — which are the most prone to violent "
+            "mean-reversion / short squeezes — while still capturing a "
+            "within-sector good-minus-weak spread at near-zero beta."
+        ),
+    },
 }
 MN_BAND_COLOR = "rgba(248, 113, 113, 0.22)"   # light red — distinguishes hedged books
 MN_MEDIAN_COLOR = "#991b1b"
