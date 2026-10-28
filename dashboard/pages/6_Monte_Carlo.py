@@ -338,6 +338,80 @@ if insider_rev_data is not None:
               f"stats are the mean across all {summary_r['n_sims']} noise sims.")
     st.divider()
 
+HIST_FREQS = {
+    "weekly": "reset to equal weight on the first session of every week",
+    "monthly": "reset to equal weight at each month-end inside the hold",
+}
+for freq, freq_desc in HIST_FREQS.items():
+    hist_data = load_config(str(ROOT / "output" / "monte_carlo_random_book"
+                                / f"sleeve_rebalance_hist_{freq}_n5_hold4_sleeves4_sims500.json"))
+    if hist_data is None:
+        continue
+    Freq = freq.capitalize()
+    any_loaded = True
+    hs = hist_data["summary"]
+    st.markdown(f"### {Freq} rebalance vs drift — one result per sleeve hold")
+    st.caption(
+        f"Every 4-month sleeve hold across all sims (same random books as the top "
+        f"section). For each hold, the sleeve's 5 names are run two ways: **drift** "
+        f"(equal-weight at entry, then left alone) and **{freq}** ({freq_desc}, "
+        f"10 bps on each reset). Each bar "
+        f"counts holds by their {freq} − drift return over the 4 months. Right of 0 = "
+        f"{freq} rebalancing helped that sleeve (scripts/sleeve_rebalance_histogram.py).")
+
+    HIST_COLOR = "#2563eb"
+    grid = "rgba(148, 163, 184, 0.15)"
+    diffs = np.array(hist_data["diffs"]) * 100
+    lo, hi = np.percentile(diffs, [0.5, 99.5])
+    fig_h = go.Figure()
+    fig_h.add_histogram(x=diffs[(diffs >= lo) & (diffs <= hi)], nbinsx=80,
+                        marker=dict(color=HIST_COLOR, line=dict(color="white", width=1)),
+                        name="Sleeve holds",
+                        hovertemplate="%{x}%: %{y:,} holds<extra></extra>")
+    fig_h.add_vline(x=0, line=dict(color="#64748b", width=1.5, dash="dash"),
+                    annotation_text="0 (no difference)", annotation_position="top left",
+                    annotation_font_color="#64748b")
+    fig_h.add_vline(x=hs["mean_diff"] * 100, line=dict(color="#0f172a", width=2),
+                    annotation_text=f"mean {hs['mean_diff']:+.3%}",
+                    annotation_position="top right", annotation_font_color="#0f172a")
+    fig_h.update_layout(
+        height=380, margin=dict(l=10, r=10, t=30, b=10), bargap=0, showlegend=False,
+        xaxis=dict(title=f"{Freq} − drift return over the 4-month hold (%)",
+                   ticksuffix="%", gridcolor=grid),
+        yaxis=dict(title="Number of sleeve holds", gridcolor=grid),
+        plot_bgcolor="rgba(0,0,0,0)")
+    st.plotly_chart(fig_h, use_container_width=True, key=f"sleeve_hist_{freq}")
+    st.caption(f"Middle 99% shown ({hs['n_sleeve_periods']:,} holds total); the "
+              "mean line uses all of them.")
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric(f"Mean {freq} − drift", f"{hs['mean_diff']:+.3%}")
+    m2.metric(f"Median {freq} − drift", f"{hs['median_diff']:+.3%}")
+    m3.metric(f"Holds where {freq} won", f"{hs['pct_positive']:.0%}")
+    m4.metric("t-stat (non-overlapping holds)", f"{hs['nonoverlap_t_stat']:.2f}",
+              help=f"Holds starting 4 months apart (n={hs['nonoverlap_n']} periods, "
+                   "averaged across sims), so periods don't share returns. |t| < 2 "
+                   "means the mean isn't distinguishable from 0.")
+
+    # each start month averaged across sims: is it a few lucky periods?
+    by_start = pd.Series(hist_data["by_start"]) * 100
+    fig_s = go.Figure()
+    fig_s.add_bar(x=by_start.index, y=by_start.values,
+                  marker=dict(color=np.where(by_start.values >= 0, HIST_COLOR, "#b45309")),
+                  hovertemplate="%{x}: %{y:+.2f}%<extra></extra>")
+    fig_s.update_layout(
+        height=300, margin=dict(l=10, r=10, t=10, b=10), showlegend=False, bargap=0.15,
+        yaxis=dict(title=f"Avg {freq} − drift (%)", ticksuffix="%", gridcolor=grid),
+        xaxis=dict(title="Hold start month", gridcolor=grid),
+        plot_bgcolor="rgba(0,0,0,0)")
+    st.markdown("**By hold start month** (averaged across sims)")
+    st.plotly_chart(fig_s, use_container_width=True, key=f"sleeve_by_start_{freq}")
+    st.caption(f"{Freq} beat drift in {hs['by_start_pct_positive']:.0%} of the "
+              f"{hs['n_start_dates']} start months. Blue = {freq} helped, amber = drift "
+              "did better. All sims share one 2019–2026 price history, so this chart, "
+              "not the sim count, is the real sample size.")
+    st.divider()
+
 if not any_loaded:
     empty_state(
         "No Monte Carlo results yet.",
