@@ -56,7 +56,7 @@ def main():
     sim_stats = {"cagr": [], "sharpe": [], "sortino": [], "max_dd": [], "beta": [], "alpha": []}
     for s in range(N_SIMS):
         print(f"sim {s + 1}/{N_SIMS}", end="\r", flush=True)
-        pr, turnover, targets = H.run_one(bundle, selector, seed=s)
+        pr, turnover, targets = H.run_one(bundle, selector, seed=s, day_one=True)
         st = _stats(pr, spy, qqq)
         for kk, v in st.items():
             sim_stats[kk].append(v)
@@ -99,7 +99,8 @@ def main():
             "pct_sims_beating_qqq": win_rate_vs_qqq,
         },
         "params": {"k": H.N, "hold_months": H.HOLD_MONTHS, "sleeves": H.SLEEVE_COUNT,
-                   "refresh_n": H.REFRESH_N, "pool": "top20", "noise_mult": NOISE_MULT},
+                   "refresh_n": H.REFRESH_N, "pool": "top20", "noise_mult": NOISE_MULT,
+                   "day_one": True},
     }
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)

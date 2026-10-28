@@ -412,6 +412,182 @@ for freq, freq_desc in HIST_FREQS.items():
               "not the sim count, is the real sample size.")
     st.divider()
 
+TAX_PATH = ROOT / "output" / "monte_carlo_random_book" / "tax_hold4_vs_hold12_sims500.json"
+tax_data = load_config(str(TAX_PATH))
+if tax_data is not None:
+    any_loaded = True
+    tp = tax_data["params"]
+    s4, s12 = tax_data["strategies"]["hold4"], tax_data["strategies"]["hold12"]
+    sh = tax_data["strategies"]["hold12_harvest"]
+    hv = tax_data["harvest_vs_hold12"]
+    sm, smh = tax_data["strategies"]["mix12"], tax_data["strategies"]["mix12_harvest"]
+    mv = tax_data["mix_vs"]
+    bspy, bqqq = tax_data["bench"]["spy"], tax_data["bench"]["qqq"]
+    START = 1000.0
+
+    st.markdown("### Taxes included — 4-month hold vs 1-year hold")
+    st.caption(
+        f"Taxable account, federal rates {tp['st_rate']:.0%} short-term / "
+        f"{tp['lt_rate']:.0%} long-term, {tp['n_sims']} sims of the same 5-name / "
+        "4-sleeve random book. Each sleeve lets its names drift between reviews. Every "
+        "sleeve is funded on day one (its first period is shortened to set up the "
+        "stagger), so no strategy sits in cash at the start. "
+        "**4-month hold**: every sale is under a year, so gains are taxed short-term. "
+        "**1-year hold**: each sleeve holds 12 months and waits until its positions "
+        "have been held more than a year before selling (a few days' delay), so "
+        "gains are long-term. Gains and losses net each calendar year (losses carry "
+        "forward) and tax is paid the next January. At the end everything is sold "
+        "and the remaining gains are taxed by holding period, so after-tax values are "
+        "what you would walk away with. SPY/QQQ are buy-and-hold, taxed once at "
+        "long-term rates when sold at the end (scripts/monte_carlo_tax.py).")
+
+    rows = [("4-month hold", s4["pre"]["median_final"], s4["post"]["median_final"]),
+            ("1-year hold", s12["pre"]["median_final"], s12["post"]["median_final"]),
+            ("1-year + loss harvest", sh["pre"]["median_final"], sh["post"]["median_final"]),
+            ("12-sleeve mix", sm["pre"]["median_final"], sm["post"]["median_final"]),
+            ("12-sleeve mix + harvest", smh["pre"]["median_final"], smh["post"]["median_final"]),
+            ("SPY", bspy["final_pre"], bspy["final_post"]),
+            ("QQQ", bqqq["final_pre"], bqqq["final_post"])]
+    lost4 = (s4["pre"]["median_final"] - s4["post"]["median_final"]) * START
+    lost12 = (s12["pre"]["median_final"] - s12["post"]["median_final"]) * START
+    drag4 = s4["pre"]["stats"]["cagr"] - s4["post"]["stats"]["cagr"]
+    drag12 = s12["pre"]["stats"]["cagr"] - s12["post"]["stats"]["cagr"]
+    st.markdown(
+        f"**How much the 4-month strategy loses to taxes:** \\${START:,.0f} grows to "
+        f"\\${s4['pre']['median_final'] * START:,.0f} before tax but only "
+        f"\\${s4['post']['median_final'] * START:,.0f} after: taxes cost "
+        f"\\${lost4:,.0f}, or {lost4 / (s4['pre']['median_final'] * START):.0%} of the "
+        f"ending value (\\${s4['median_tax_paid'] * START:,.0f} paid to the IRS, the "
+        f"rest is growth that money would have earned). CAGR drops from {s4['pre']['stats']['cagr']:.1%} to "
+        f"{s4['post']['stats']['cagr']:.1%} ({drag4 * 100:.1f} points a year), because "
+        f"{s4['median_st_share']:.0%} of its gains are short-term at "
+        f"{tp['st_rate']:.0%}.\n\n"
+        f"**Holding a year instead:** taxes cost only \\${lost12:,.0f} "
+        f"({drag12 * 100:.1f} points a year), since "
+        f"{1 - s12['median_st_share']:.0%} of the gains are long-term. But the 1-year "
+        f"hold also earns less before tax ({s12['pre']['stats']['cagr']:.1%} vs "
+        f"{s4['pre']['stats']['cagr']:.1%}), because the picks are refreshed less "
+        f"often. After tax it ends at \\${s12['post']['median_final'] * START:,.0f} vs "
+        f"\\${s4['post']['median_final'] * START:,.0f} for the 4-month hold.\n\n"
+        f"**1-year + loss harvesting:** same 1-year book, but any position that is "
+        f"below cost the day before its 1-year mark is sold then (a short-term loss), "
+        f"while winners still sell after the mark (long-term gain). It harvests "
+        f"\\${sh['median_harvested'] * START:,.0f} of losses and trims taxes paid from "
+        f"\\${s12['median_tax_paid'] * START:,.0f} to "
+        f"\\${sh['median_tax_paid'] * START:,.0f}, but ends "
+        f"\\${-hv['mean_final_diff'] * START:,.0f} *lower* on average after tax and "
+        f"beats the plain 1-year hold in only {hv['pct_sims_harvest_better']:.0%} of "
+        f"sims. Under US netting rules a short-term loss only beats a long-term one when "
+        f"it offsets short-term gains taxed at {tp['st_rate']:.0%}, and the 1-year "
+        f"strategy has almost none, so both kinds of loss end up offsetting long-term "
+        f"gains at {tp['lt_rate']:.0%}. Meanwhile the sold losers' cash sits idle for a "
+        f"few days, and a loser re-picked within 30 days loses its deduction to the "
+        f"wash-sale rule.\n\n"
+        f"**12-sleeve mix:** 12 sleeves of 5 names, 1/12 of the money each. Sleeves "
+        f"1, 3, …, 11 hold 4 months (short-term gains); sleeves 2, 4, …, 12 hold a year. "
+        f"With loss harvesting in the 1-year sleeves, their short-term losses offset the "
+        f"4-month sleeves' gains taxed at {tp['st_rate']:.0%}, so the harvesting finally "
+        f"pays: it adds \\${mv['mix12']['mean_final_diff'] * START:,.0f} over the same "
+        f"mix without harvesting and wins in {mv['mix12']['pct_sims_better']:.0%} of "
+        f"sims. But the mix as a whole ends "
+        f"\\${-mv['hold12']['mean_final_diff'] * START:,.0f} below the plain 1-year "
+        f"hold on average (better in only {mv['hold12']['pct_sims_better']:.0%} of sims). "
+        f"Half its money is in 4-month sleeves, so {smh['median_st_share']:.0%} of its "
+        f"gains are still short-term, and the \\${smh['median_harvested'] * START:,.0f} "
+        f"of harvested losses covers only a small part of them.")
+
+    PRE_COLOR, POST_COLOR = "#94a3b8", "#2563eb"
+    grid = "rgba(148, 163, 184, 0.15)"
+    labels = [r[0] for r in rows]
+    fig_t = go.Figure()
+    for tag, idx, color in (("Before tax", 1, PRE_COLOR), ("After tax", 2, POST_COLOR)):
+        vals = [r[idx] * START for r in rows]
+        fig_t.add_bar(x=labels, y=vals, name=tag, marker=dict(color=color),
+                      text=[f"${v:,.0f}" for v in vals], textposition="outside",
+                      hovertemplate=f"%{{x}} {tag.lower()}: $%{{y:,.0f}}<extra></extra>")
+    fig_t.update_layout(
+        barmode="group", bargap=0.3, bargroupgap=0.08, height=380,
+        margin=dict(l=10, r=10, t=10, b=10),
+        yaxis=dict(title=f"Median ending value (${START:,.0f} invested)", tickprefix="$",
+                   gridcolor=grid),
+        plot_bgcolor="rgba(0,0,0,0)", legend=dict(orientation="h", y=1.1))
+    st.plotly_chart(fig_t, use_container_width=True, key="tax_bars")
+
+    dates_t = tax_data["dates"]
+    fig_c = go.Figure()
+    for name, curve, color in (("SPY", bspy["curve_post"], BENCH_COLOR["SPY"]),
+                               ("QQQ", bqqq["curve_post"], BENCH_COLOR["QQQ"])):
+        fig_c.add_scatter(x=dates_t, y=np.array(curve) * START, mode="lines", name=name,
+                          line=dict(color=color, width=1.5, dash="dash"),
+                          hovertemplate=f"{name}: $%{{y:,.0f}}<extra></extra>")
+    for name, sd, color in (("4-month hold", s4, "#db2777"), ("1-year hold", s12, POST_COLOR)):
+        fig_c.add_scatter(x=dates_t, y=np.array(sd["post"]["median_curve"]) * START,
+                          mode="lines", name=f"{name} (median)",
+                          line=dict(color=color, width=2),
+                          hovertemplate=f"{name}: $%{{y:,.0f}}<extra></extra>")
+    fig_c.update_layout(
+        height=400, margin=dict(l=10, r=10, t=10, b=10), hovermode="x unified",
+        yaxis=dict(title=f"After-tax value (${START:,.0f} invested)", tickprefix="$",
+                   gridcolor=grid),
+        xaxis=dict(gridcolor=grid), plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(orientation="h", y=1.1))
+    st.markdown("**After-tax growth** (median across sims)")
+    st.plotly_chart(fig_c, use_container_width=True, key="tax_curves")
+    st.caption("Taxes come out each January, so the lines step down then. The drop at "
+              "the very end is the final cash-out tax on positions still held.")
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("1-year beats 4-month after tax",
+              f"{tax_data['pct_sims_hold12_beats_hold4_after_tax']:.0%} of sims")
+    m2.metric("1-year beats SPY after tax",
+              f"{tax_data['pct_sims_hold12_beats_spy_after_tax']:.0%} of sims")
+    m3.metric("4-month beats SPY after tax",
+              f"{tax_data['pct_sims_hold4_beats_spy_after_tax']:.0%} of sims")
+    m4.metric("Harvest beats plain 1-year after tax",
+              f"{hv['pct_sims_harvest_better']:.0%} of sims")
+    m5.metric("Mix + harvest beats plain 1-year after tax",
+              f"{mv['hold12']['pct_sims_better']:.0%} of sims")
+
+    trows = []
+    for name, sd in (("4-month hold", s4), ("1-year hold", s12),
+                     ("1-year + loss harvest", sh), ("12-sleeve mix", sm),
+                     ("12-sleeve mix + harvest", smh)):
+        trows.append({"": name, "CAGR before tax": sd["pre"]["stats"]["cagr"],
+                      "CAGR after tax": sd["post"]["stats"]["cagr"],
+                      "Tax drag (pts/yr)": (sd["pre"]["stats"]["cagr"]
+                                            - sd["post"]["stats"]["cagr"]) * 100,
+                      "Taxes paid": sd["median_tax_paid"] * START,
+                      "Gains short-term": sd["median_st_share"],
+                      "Sharpe after tax": sd["post"]["stats"]["sharpe"],
+                      "Max DD after tax": sd["post"]["stats"]["max_dd"]})
+    for name, b in (("SPY", bspy), ("QQQ", bqqq)):
+        trows.append({"": name, "CAGR before tax": b["stats_pre"]["cagr"],
+                      "CAGR after tax": b["stats_post"]["cagr"],
+                      "Tax drag (pts/yr)": (b["stats_pre"]["cagr"]
+                                            - b["stats_post"]["cagr"]) * 100,
+                      "Taxes paid": b["tax_paid"] * START, "Gains short-term": 0.0,
+                      "Sharpe after tax": b["stats_post"]["sharpe"],
+                      "Max DD after tax": b["stats_post"]["max_dd"]})
+    ttable = pd.DataFrame(trows).set_index("")
+    st.dataframe(
+        ttable.style.format({
+            "CAGR before tax": "{:+.1%}", "CAGR after tax": "{:+.1%}",
+            "Tax drag (pts/yr)": "{:.1f}", "Taxes paid": "${:,.0f}",
+            "Gains short-term": "{:.0%}", "Sharpe after tax": "{:.2f}",
+            "Max DD after tax": "{:.1%}",
+        }),
+        use_container_width=True, height=42 + 35 * len(ttable))
+    st.caption(
+        f"Medians across sims; {tp['years']:.1f} years; {tp['cost_bps']:.0f} bps per "
+        "trade. Wash-sale rule applied (30 days either side). The 1-year hold's few "
+        "short-term gains all come from the final cash-out "
+        "(positions bought in the last year); before that it realizes none. Dividends are "
+        "treated as reinvested and not taxed yearly, which flatters every line slightly, "
+        "buy-and-hold most. The backtest starts 2020-01-31, a month before the COVID "
+        "crash; like every section on this page, all strategies are fully invested "
+        "from day one and take the full crash, the same as SPY.")
+    st.divider()
+
 if not any_loaded:
     empty_state(
         "No Monte Carlo results yet.",

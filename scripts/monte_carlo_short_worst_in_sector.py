@@ -116,7 +116,9 @@ def _random_targets(comp: dict, dates: list, rng: random.Random,
     for i, d in enumerate(dates):
         for j in range(sleeve_count):
             offset = j * step
-            if i >= offset and (i - offset) % hold_months == 0:
+            # every sleeve is filled on the first date (fully invested from day
+            # one); later reviews keep the stagger
+            if i == 0 or (i >= offset and (i - offset) % hold_months == 0):
                 scores = comp.get(d)
                 if scores is not None:
                     sleeve_holdings[j] = _random_book(

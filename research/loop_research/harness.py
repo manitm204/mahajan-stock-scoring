@@ -391,7 +391,11 @@ def top20_random10_mktcap5_sector_selector(scores, parent_scores, held, k, refre
     return keep + fill
 
 
-def _sleeve_targets(bundle, selector, k, hold_months, sleeve_count, refresh_n, rng):
+def _sleeve_targets(bundle, selector, k, hold_months, sleeve_count, refresh_n, rng,
+                    day_one=False):
+    """day_one=True fills every sleeve on the first date (fully invested from
+    the start; later reviews keep the stagger). Default False keeps the
+    original ramp-up, which existing loop_research results were scored on."""
     data = bundle["data"]
     parent_scores_by_date = bundle["parent_scores"]
     dates = list(data.rebal_dates)
@@ -402,7 +406,7 @@ def _sleeve_targets(bundle, selector, k, hold_months, sleeve_count, refresh_n, r
     for i, d in enumerate(dates):
         for j in range(sleeve_count):
             offset = j * step
-            if i >= offset and (i - offset) % hold_months == 0:
+            if (day_one and i == 0) or (i >= offset and (i - offset) % hold_months == 0):
                 scores = data.comp.get(d)
                 pscores = parent_scores_by_date.get(d, {})
                 ctx = {"date": d, "dates": dates, "i": i, "bundle": bundle}
@@ -419,11 +423,12 @@ def _sleeve_targets(bundle, selector, k, hold_months, sleeve_count, refresh_n, r
 
 
 def run_one(bundle, selector, seed, k=N, hold_months=HOLD_MONTHS,
-           sleeve_count=SLEEVE_COUNT, refresh_n=REFRESH_N):
+           sleeve_count=SLEEVE_COUNT, refresh_n=REFRESH_N, day_one=False):
     data = bundle["data"]
     rebal = list(data.rebal_dates)
     rng = random.Random(seed)
-    targets = _sleeve_targets(bundle, selector, k, hold_months, sleeve_count, refresh_n, rng)
+    targets = _sleeve_targets(bundle, selector, k, hold_months, sleeve_count, refresh_n, rng,
+                              day_one=day_one)
     weights = targets_to_weight_matrix(targets, rebal)
     pr, turnover = compute_portfolio_returns(weights, data.matrix, rebal)
     return pr, turnover, targets
