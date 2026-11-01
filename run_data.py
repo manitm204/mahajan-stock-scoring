@@ -65,6 +65,7 @@ def parse_args() -> argparse.Namespace:
 
 # FINRA publishes short interest bi-monthly; past this age a cycle was missed.
 _SHORT_INTEREST_STALE_DAYS = 15
+_GRADE_EVENTS_STALE_DAYS = 7
 
 
 def _check_short_interest_freshness(db, log) -> None:
@@ -82,6 +83,15 @@ def _check_short_interest_freshness(db, log) -> None:
                     age)
     else:
         log.info("Short interest skipped (fetched %d days ago; still fresh)", age)
+
+
+def _check_grade_events_freshness(db, log) -> None:
+    last = db.scalar("SELECT MAX(fetched_at) FROM analyst_grade_events")
+    age = (datetime.now(timezone.utc) - datetime.fromisoformat(last)).days if last else None
+    if age is None or age >= _GRADE_EVENTS_STALE_DAYS:
+        log.warning("Analyst grade events %s; rev_rating_surprise_90d decays "
+                    "without them — run `python -m data.grades --grade-actions`",
+                    "never fetched" if age is None else f"last fetched {age} days ago")
 
 
 def _hdr(log, stage: str) -> float:
@@ -185,6 +195,13 @@ def main() -> None:
             r = grades.update_grades(db, tickers, registry=registry)
             summary["revision_rows"] = r["records"]
             summary["failed_tickers"].update(r["failed"])
+            # Individual rating actions feed rev_rating_surprise_90d; without
+            # this the 90d window silently empties out.
+            r = grades.update_grade_events(db, tickers, registry=registry)
+            summary["grade_event_rows"] = r["rows"]
+            summary["failed_tickers"].update(r["failed"])
+        else:
+            _check_grade_events_freshness(db, log)
 
         # 9. Earnings calendar ---------------------------------------------
         if not args.no_earnings_calendar:
